@@ -1,0 +1,136 @@
+{
+  "float": [
+    {
+      "name": "font_size_input",
+      "value": "58fp"
+    },
+    {
+      "name": "font_size_text",
+      "value": "24fp"
+    },
+    {
+      "name": "font_size_dot",
+      "value": "30fp"
+    },
+    {
+      "name": "input_height",
+      "value": "96vp"
+    },
+    {
+      "name": "input_margin_right",
+      "value": "12vp"
+    },
+    {
+      "name": "input_margin_top",
+      "value": "3vp"
+    },
+    {
+      "name": "text_height",
+      "value": "40vp"
+    },
+    {
+      "name": "text_margin_right",
+      "value": "12vp"
+    },
+    {
+      "name": "text_margin_bottom",
+      "value": "2vp"
+    },
+    {
+      "name": "key_width",
+      "value": "78vp"
+    },
+    {
+      "name": "key_height",
+      "value": "66vp"
+    },
+    {
+      "name": "equals_height",
+      "value": "74vp"
+    },
+    {
+      "name": "border_radius",
+      "value": "12vp"
+    },
+    {
+      "name": "margin_top",
+      "value": "2vp"
+    },
+    {
+      "name": "margin_bottom",
+      "value": "1vp"
+    },
+    {
+      "name": "margin_left",
+      "value": "4vp"
+    },
+    {
+      "name": "margin_right",
+      "value": "4vp"
+    },
+    {
+      "name": "font_size_title_large",
+      "value": "28fp"
+    },
+    {
+      "name": "font_size_title_medium",
+      "value": "24fp"
+    },
+    {
+      "name": "font_size_back_icon",
+      "value": "32fp"
+    },
+    {
+      "name": "font_size_body",
+      "value": "20fp"
+    },
+    {
+      "name": "font_size_caption",
+      "value": "16fp"
+    },
+    {
+      "name": "font_size_small",
+      "value": "15fp"
+    },
+    {
+      "name": "font_size_tiny",
+      "value": "14fp"
+    },
+    {
+      "name": "page_header_height",
+      "value": "72vp"
+    },
+    {
+      "name": "page_header_height_small",
+      "value": "60vp"
+    },
+    {
+      "name": "button_height",
+      "value": "56vp"
+    },
+    {
+      "name": "button_icon_size",
+      "value": "42vp"
+    },
+    {
+      "name": "button_dialog_height",
+      "value": "52vp"
+    },
+    {
+      "name": "icon_size_small",
+      "value": "32vp"
+    },
+    {
+      "name": "icon_size_back",
+      "value": "48vp"
+    },
+    {
+      "name": "empty_icon_size",
+      "value": "64fp"
+    },
+    {
+      "name": "font_size_result",
+      "value": "30fp"
+    }
+  ]
+}

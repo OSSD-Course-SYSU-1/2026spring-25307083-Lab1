@@ -1,0 +1,52 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "module description"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "description"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "SimpleCalculator"
+    },
+    {
+      "name": "error",
+      "value": "error"
+    },
+    {
+      "name": "distributed_permission",
+      "value": "Used for cross-device data sync"
+    },
+    {
+      "name": "feature_menu",
+      "value": "Feature Menu"
+    },
+    {
+      "name": "unit_conversion",
+      "value": "Unit Conversion"
+    },
+    {
+      "name": "currency_conversion",
+      "value": "Currency Exchange"
+    },
+    {
+      "name": "date_calc",
+      "value": "Date Calculator"
+    },
+    {
+      "name": "bmi_calc",
+      "value": "BMI Calculator"
+    },
+    {
+      "name": "tip_calc",
+      "value": "Tip Calculator"
+    },
+    {
+      "name": "mortgage_calc",
+      "value": "Mortgage Calculator"
+    }
+  ]
+}

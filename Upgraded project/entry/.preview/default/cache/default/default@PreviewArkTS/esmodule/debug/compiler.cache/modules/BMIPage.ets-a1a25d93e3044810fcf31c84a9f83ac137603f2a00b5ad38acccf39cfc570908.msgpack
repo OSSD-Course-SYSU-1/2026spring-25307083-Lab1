@@ -1,0 +1,1229 @@
+Ôr@Ÿªassertions¤code´customTransformCache¬dependencies¢id¤meta±moduleSideEffects¬originalCode±originalSourcemap«resolvedIds®sourcemapChainµsyntheticNamedExportsµtransformDependencies®transformFiles¨cacheAstÔrAÚ{žif (!("finalizeConstruction" in ViewPU.prototype)) {
+    Reflect.set(ViewPU.prototype, "finalizeConstruction", () => { });
+}
+/*
+ * BMI Calculator Page - BMIè®¡ç®—é¡µé¢
+ * æ”¯æŒå…¬åˆ¶(kg/cm)å’Œè‹±åˆ¶(lb/ft+in)
+ */
+import router from '@ohos.router';
+var UnitSystem;
+(function (UnitSystem) {
+    UnitSystem["METRIC"] = "\u516C\u5236";
+    UnitSystem["IMPERIAL"] = "\u82F1\u5236";
+})(UnitSystem || (UnitSystem = {}));
+class BMILevel {
+    constructor(label, min, max, color) {
+        this.label = label;
+        this.min = min;
+        this.max = max;
+        this.color = color;
+    }
+}
+class BMIPage extends ViewPU {
+    constructor(parent, params, __localStorage, elmtId = -1, paramsLambda = undefined, extraInfo) {
+        super(parent, __localStorage, elmtId, extraInfo);
+        if (typeof paramsLambda === "function") {
+            this.paramsGenerator_ = paramsLambda;
+        }
+        this.__unitSystem = new ObservedPropertySimplePU(UnitSystem.METRIC, this, "unitSystem");
+        this.__heightCm = new ObservedPropertySimplePU('170', this, "heightCm");
+        this.__weightKg = new ObservedPropertySimplePU('65', this, "weightKg");
+        this.__heightFt = new ObservedPropertySimplePU('5', this, "heightFt");
+        this.__heightIn = new ObservedPropertySimplePU('7', this, "heightIn");
+        this.__weightLb = new ObservedPropertySimplePU('143', this, "weightLb");
+        this.__bmiValue = new ObservedPropertySimplePU(0, this, "bmiValue");
+        this.__bmiCategory = new ObservedPropertySimplePU('', this, "bmiCategory");
+        this.__bmiColor = new ObservedPropertySimplePU('#4CAF50', this, "bmiColor");
+        this.__idealWeight = new ObservedPropertySimplePU('', this, "idealWeight");
+        this.__showResult = new ObservedPropertySimplePU(false, this, "showResult");
+        this.levels = [
+            new BMILevel('åç˜¦', 0, 18.5, '#2196F3'),
+            new BMILevel('æ­£å¸¸', 18.5, 24.9, '#4CAF50'),
+            new BMILevel('åé‡', 25, 29.9, '#FF9800'),
+            new BMILevel('è‚¥èƒ–', 30, 34.9, '#FF5722'),
+            new BMILevel('é‡åº¦è‚¥èƒ–', 35, 100, '#F44336'),
+        ];
+        this.setInitiallyProvidedValue(params);
+        this.finalizeConstruction();
+    }
+    setInitiallyProvidedValue(params) {
+        if (params.unitSystem !== undefined) {
+            this.unitSystem = params.unitSystem;
+        }
+        if (params.heightCm !== undefined) {
+            this.heightCm = params.heightCm;
+        }
+        if (params.weightKg !== undefined) {
+            this.weightKg = params.weightKg;
+        }
+        if (params.heightFt !== undefined) {
+            this.heightFt = params.heightFt;
+        }
+        if (params.heightIn !== undefined) {
+            this.heightIn = params.heightIn;
+        }
+        if (params.weightLb !== undefined) {
+            this.weightLb = params.weightLb;
+        }
+        if (params.bmiValue !== undefined) {
+            this.bmiValue = params.bmiValue;
+        }
+        if (params.bmiCategory !== undefined) {
+            this.bmiCategory = params.bmiCategory;
+        }
+        if (params.bmiColor !== undefined) {
+            this.bmiColor = params.bmiColor;
+        }
+        if (params.idealWeight !== undefined) {
+            this.idealWeight = params.idealWeight;
+        }
+        if (params.showResult !== undefined) {
+            this.showResult = params.showResult;
+        }
+        if (params.levels !== undefined) {
+            this.levels = params.levels;
+        }
+    }
+    updateStateVars(params) {
+    }
+    purgeVariableDependenciesOnElmtId(rmElmtId) {
+        this.__unitSystem.purgeDependencyOnElmtId(rmElmtId);
+        this.__heightCm.purgeDependencyOnElmtId(rmElmtId);
+        this.__weightKg.purgeDependencyOnElmtId(rmElmtId);
+        this.__heightFt.purgeDependencyOnElmtId(rmElmtId);
+        this.__heightIn.purgeDependencyOnElmtId(rmElmtId);
+        this.__weightLb.purgeDependencyOnElmtId(rmElmtId);
+        this.__bmiValue.purgeDependencyOnElmtId(rmElmtId);
+        this.__bmiCategory.purgeDependencyOnElmtId(rmElmtId);
+        this.__bmiColor.purgeDependencyOnElmtId(rmElmtId);
+        this.__idealWeight.purgeDependencyOnElmtId(rmElmtId);
+        this.__showResult.purgeDependencyOnElmtId(rmElmtId);
+    }
+    aboutToBeDeleted() {
+        this.__unitSystem.aboutToBeDeleted();
+        this.__heightCm.aboutToBeDeleted();
+        this.__weightKg.aboutToBeDeleted();
+        this.__heightFt.aboutToBeDeleted();
+        this.__heightIn.aboutToBeDeleted();
+        this.__weightLb.aboutToBeDeleted();
+        this.__bmiValue.aboutToBeDeleted();
+        this.__bmiCategory.aboutToBeDeleted();
+        this.__bmiColor.aboutToBeDeleted();
+        this.__idealWeight.aboutToBeDeleted();
+        this.__showResult.aboutToBeDeleted();
+        SubscriberManager.Get().delete(this.id__());
+        this.aboutToBeDeletedInternal();
+    }
+    get unitSystem() {
+        return this.__unitSystem.get();
+    }
+    set unitSystem(newValue) {
+        this.__unitSystem.set(newValue);
+    }
+    get heightCm() {
+        return this.__heightCm.get();
+    }
+    set heightCm(newValue) {
+        this.__heightCm.set(newValue);
+    }
+    get weightKg() {
+        return this.__weightKg.get();
+    }
+    set weightKg(newValue) {
+        this.__weightKg.set(newValue);
+    }
+    get heightFt() {
+        return this.__heightFt.get();
+    }
+    set heightFt(newValue) {
+        this.__heightFt.set(newValue);
+    }
+    get heightIn() {
+        return this.__heightIn.get();
+    }
+    set heightIn(newValue) {
+        this.__heightIn.set(newValue);
+    }
+    get weightLb() {
+        return this.__weightLb.get();
+    }
+    set weightLb(newValue) {
+        this.__weightLb.set(newValue);
+    }
+    get bmiValue() {
+        return this.__bmiValue.get();
+    }
+    set bmiValue(newValue) {
+        this.__bmiValue.set(newValue);
+    }
+    get bmiCategory() {
+        return this.__bmiCategory.get();
+    }
+    set bmiCategory(newValue) {
+        this.__bmiCategory.set(newValue);
+    }
+    get bmiColor() {
+        return this.__bmiColor.get();
+    }
+    set bmiColor(newValue) {
+        this.__bmiColor.set(newValue);
+    }
+    get idealWeight() {
+        return this.__idealWeight.get();
+    }
+    set idealWeight(newValue) {
+        this.__idealWeight.set(newValue);
+    }
+    get showResult() {
+        return this.__showResult.get();
+    }
+    set showResult(newValue) {
+        this.__showResult.set(newValue);
+    }
+    aboutToAppear() {
+        this.calculate();
+    }
+    initialRender() {
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Column.create();
+            Column.debugLine("entry/src/main/ets/pages/BMIPage.ets(61:5)", "entry");
+            Column.width('100%');
+            Column.height('100%');
+            Column.backgroundColor('#F1F3F5');
+        }, Column);
+        this.buildHeader.bind(this)();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Scroll.create();
+            Scroll.debugLine("entry/src/main/ets/pages/BMIPage.ets(64:7)", "entry");
+            Scroll.layoutWeight(1);
+            Scroll.width('100%');
+        }, Scroll);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Column.create();
+            Column.debugLine("entry/src/main/ets/pages/BMIPage.ets(65:9)", "entry");
+            Column.width('100%');
+        }, Column);
+        // å•ä½åˆ¶åˆ‡æ¢
+        this.buildUnitToggle.bind(this)();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            If.create();
+            if (this.unitSystem === UnitSystem.METRIC) {
+                this.ifElseBranchUpdateFunction(0, () => {
+                    this.buildMetricInputs.bind(this)();
+                });
+            }
+            else {
+                this.ifElseBranchUpdateFunction(1, () => {
+                    this.buildImperialInputs.bind(this)();
+                });
+            }
+        }, If);
+        If.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            // è®¡ç®—æŒ‰é’®
+            Button.createWithLabel('è®¡ç®— BMI');
+            Button.debugLine("entry/src/main/ets/pages/BMIPage.ets(76:11)", "entry");
+            // è®¡ç®—æŒ‰é’®
+            Button.fontSize({ "id": 16777261, "type": 10002, params: [], "bundleName": "com.example.simplecalculator", "moduleName": "entry" });
+            // è®¡ç®—æŒ‰é’®
+            Button.fontColor(Color.White);
+            // è®¡ç®—æŒ‰é’®
+            Button.backgroundColor('#007DFF');
+            // è®¡ç®—æŒ‰é’®
+            Button.width('100%');
+            // è®¡ç®—æŒ‰é’®
+            Button.height(48);
+            // è®¡ç®—æŒ‰é’®
+            Button.borderRadius(12);
+            // è®¡ç®—æŒ‰é’®
+            Button.margin({ top: 12, left: 16, right: 16 });
+            // è®¡ç®—æŒ‰é’®
+            Button.onClick(() => { this.calculate(); });
+        }, Button);
+        // è®¡ç®—æŒ‰é’®
+        Button.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            If.create();
+            // ç»“æžœå±•ç¤º
+            if (this.showResult) {
+                this.ifElseBranchUpdateFunction(0, () => {
+                    this.buildResultPanel.bind(this)();
+                });
+            }
+            else {
+                this.ifElseBranchUpdateFunction(1, () => {
+                });
+            }
+        }, If);
+        If.pop();
+        Column.pop();
+        Scroll.pop();
+        Column.pop();
+    }
+    buildHeader(parent = null) {
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Row.create();
+            Row.debugLine("entry/src/main/ets/pages/BMIPage.ets(103:5)", "entry");
+            Row.width('100%');
+            Row.height({ "id": 16777269, "type": 10002, params: [], "bundleName": "com.example.simplecalculator", "moduleName": "entry" });
+            Row.padding({ left: 16, right: 16 });
+            Row.backgroundColor('#FFFFFF');
+            Row.shadow({ radius: 4, color: '#10000000', offsetY: 2 });
+        }, Row);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Button.createWithChild({ type: ButtonType.Circle });
+            Button.debugLine("entry/src/main/ets/pages/BMIPage.ets(104:7)", "entry");
+            Button.width({ "id": 16777267, "type": 10002, params: [], "bundleName": "com.example.simplecalculator", "moduleName": "entry" });
+            Button.height({ "id": 16777267, "type": 10002, params: [], "bundleName": "com.example.simplecalculator", "moduleName": "entry" });
+            Button.backgroundColor(Color.Transparent);
+            Button.onClick(() => { router.back(); });
+        }, Button);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Text.create('â†');
+            Text.debugLine("entry/src/main/ets/pages/BMIPage.ets(105:9)", "entry");
+            Text.fontSize({ "id": 16777265, "type": 10002, params: [], "bundleName": "com.example.simplecalculator", "moduleName": "entry" });
+            Text.fontColor('#333333');
+        }, Text);
+        Text.pop();
+        Button.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Text.create('BMI è®¡ç®—');
+            Text.debugLine("entry/src/main/ets/pages/BMIPage.ets(111:7)", "entry");
+            Text.fontSize({ "id": 16777265, "type": 10002, params: [], "bundleName": "com.example.simplecalculator", "moduleName": "entry" });
+            Text.fontWeight(FontWeight.Bold);
+            Text.fontColor('#1A1A1A');
+            Text.margin({ left: 8 });
+        }, Text);
+        Text.pop();
+        Row.pop();
+    }
+    buildUnitToggle(parent = null) {
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Row.create();
+            Row.debugLine("entry/src/main/ets/pages/BMIPage.ets(122:5)", "entry");
+            Row.width('100%');
+            Row.justifyContent(FlexAlign.Center);
+            Row.padding({ top: 12, bottom: 8 });
+        }, Row);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Button.createWithLabel(UnitSystem.METRIC);
+            Button.debugLine("entry/src/main/ets/pages/BMIPage.ets(123:7)", "entry");
+            Button.fontSize({ "id": 16777262, "type": 10002, params: [], "bundleName": "com.example.simplecalculator", "moduleName": "entry" });
+            Button.fontColor(this.unitSystem === UnitSystem.METRIC ? Color.White : '#666666');
+            Button.backgroundColor(this.unitSystem === UnitSystem.METRIC ? '#007DFF' : '#F5F5F5');
+            Button.borderRadius(20);
+            Button.height(36);
+            Button.padding({ left: 20, right: 20 });
+            Button.border({ width: 1, color: this.unitSystem === UnitSystem.METRIC ? '#007DFF' : '#E0E0E0' });
+            Button.onClick(() => { this.unitSystem = UnitSystem.METRIC; });
+        }, Button);
+        Button.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Button.createWithLabel(UnitSystem.IMPERIAL);
+            Button.debugLine("entry/src/main/ets/pages/BMIPage.ets(132:7)", "entry");
+            Button.fontSize({ "id": 16777262, "type": 10002, params: [], "bundleName": "com.example.simplecalculator", "moduleName": "entry" });
+            Button.fontColor(this.unitSystem === UnitSystem.IMPERIAL ? Color.White : '#666666');
+            Button.backgroundColor(this.unitSystem === UnitSystem.IMPERIAL ? '#007DFF' : '#F5F5F5');
+            Button.borderRadius(20);
+            Button.height(36);
+            Button.padding({ left: 20, right: 20 });
+            Button.margin({ left: 8 });
+            Button.border({ width: 1, color: this.unitSystem === UnitSystem.IMPERIAL ? '#007DFF' : '#E0E0E0' });
+            Button.onClick(() => { this.unitSystem = UnitSystem.IMPERIAL; });
+        }, Button);
+        Button.pop();
+        Row.pop();
+    }
+    buildMetricInputs(parent = null) {
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Column.create();
+            Column.debugLine("entry/src/main/ets/pages/BMIPage.ets(149:5)", "entry");
+            Column.padding({ left: 16, right: 16 });
+        }, Column);
+        this.buildInputCard.bind(this)('èº«é«˜', this.heightCm, 'cm', (v) => { this.heightCm = v; });
+        this.buildInputCard.bind(this)('ä½“é‡', this.weightKg, 'kg', (v) => { this.weightKg = v; });
+        Column.pop();
+    }
+    buildImperialInputs(parent = null) {
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Column.create();
+            Column.debugLine("entry/src/main/ets/pages/BMIPage.ets(160:5)", "entry");
+            Column.padding({ left: 16, right: 16 });
+        }, Column);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            // èº«é«˜ - ft + in
+            Column.create();
+            Column.debugLine("entry/src/main/ets/pages/BMIPage.ets(162:7)", "entry");
+            // èº«é«˜ - ft + in
+            Column.width('100%');
+            // èº«é«˜ - ft + in
+            Column.padding(16);
+            // èº«é«˜ - ft + in
+            Column.backgroundColor('#FFFFFF');
+            // èº«é«˜ - ft + in
+            Column.borderRadius(16);
+            // èº«é«˜ - ft + in
+            Column.border({ width: 1, color: '#EEEEEE' });
+            // èº«é«˜ - ft + in
+            Column.margin({ bottom: 12 });
+        }, Column);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Text.create('èº«é«˜');
+            Text.debugLine("entry/src/main/ets/pages/BMIPage.ets(163:9)", "entry");
+            Text.fontSize({ "id": 16777264, "type": 10002, params: [], "bundleName": "com.example.simplecalculator", "moduleName": "entry" });
+            Text.fontColor('#999999');
+            Text.width('100%');
+        }, Text);
+        Text.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Row.create();
+            Row.debugLine("entry/src/main/ets/pages/BMIPage.ets(167:9)", "entry");
+            Row.width('100%');
+            Row.margin({ top: 8 });
+        }, Row);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Column.create();
+            Column.debugLine("entry/src/main/ets/pages/BMIPage.ets(168:11)", "entry");
+            Column.layoutWeight(1);
+        }, Column);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            TextInput.create({ text: this.heightFt, placeholder: '0' });
+            TextInput.debugLine("entry/src/main/ets/pages/BMIPage.ets(169:13)", "entry");
+            TextInput.fontSize({ "id": 16777271, "type": 10002, params: [], "bundleName": "com.example.simplecalculator", "moduleName": "entry" });
+            TextInput.fontWeight(FontWeight.Bold);
+            TextInput.textAlign(TextAlign.Center);
+            TextInput.type(InputType.Number);
+            TextInput.backgroundColor('#FAFAFA');
+            TextInput.width('100%');
+            TextInput.height(52);
+            TextInput.borderRadius(8);
+            TextInput.border({ width: 1, color: '#E0E0E0' });
+            TextInput.onChange((v) => { this.heightFt = v; });
+        }, TextInput);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Text.create('è‹±å°º (ft)');
+            Text.debugLine("entry/src/main/ets/pages/BMIPage.ets(175:13)", "entry");
+            Text.fontSize({ "id": 16777264, "type": 10002, params: [], "bundleName": "com.example.simplecalculator", "moduleName": "entry" });
+            Text.fontColor('#999999');
+            Text.margin({ top: 4 });
+        }, Text);
+        Text.pop();
+        Column.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Column.create();
+            Column.debugLine("entry/src/main/ets/pages/BMIPage.ets(180:11)", "entry");
+            Column.layoutWeight(1);
+        }, Column);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            TextInput.create({ text: this.heightIn, placeholder: '0' });
+            TextInput.debugLine("entry/src/main/ets/pages/BMIPage.ets(181:13)", "entry");
+            TextInput.fontSize({ "id": 16777271, "type": 10002, params: [], "bundleName": "com.example.simplecalculator", "moduleName": "entry" });
+            TextInput.fontWeight(FontWeight.Bold);
+            TextInput.textAlign(TextAlign.Center);
+            TextInput.type(InputType.Number);
+            TextInput.backgroundColor('#FAFAFA');
+            TextInput.width('100%');
+            TextInput.height(52);
+            TextInput.borderRadius(8);
+            TextInput.border({ width: 1, color: '#E0E0E0' });
+            TextInput.margin({ left: 12 });
+            TextInput.onChange((v) => { this.heightIn = v; });
+        }, TextInput);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Text.create('è‹±å¯¸ (in)');
+            Text.debugLine("entry/src/main/ets/pages/BMIPage.ets(188:13)", "entry");
+            Text.fontSize({ "id": 16777264, "type": 10002, params: [], "bundleName": "com.example.simplecalculator", "moduleName": "entry" });
+            Text.fontColor('#999999');
+            Text.margin({ top: 4 });
+        }, Text);
+        Text.pop();
+        Column.pop();
+        Row.pop();
+        // èº«é«˜ - ft + in
+        Column.pop();
+        this.buildInputCard.bind(this)('ä½“é‡', this.weightLb, 'ç£… (lb)', (v) => { this.weightLb = v; });
+        Column.pop();
+    }
+    buildInputCard(label, value, unit, onChange, parent = null) {
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Column.create();
+            Column.debugLine("entry/src/main/ets/pages/BMIPage.ets(207:5)", "entry");
+            Column.width('100%');
+            Column.padding(16);
+            Column.backgroundColor('#FFFFFF');
+            Column.borderRadius(16);
+            Column.border({ width: 1, color: '#EEEEEE' });
+            Column.margin({ bottom: 12 });
+        }, Column);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Text.create(label);
+            Text.debugLine("entry/src/main/ets/pages/BMIPage.ets(208:7)", "entry");
+            Text.fontSize({ "id": 16777264, "type": 10002, params: [], "bundleName": "com.example.simplecalculator", "moduleName": "entry" });
+            Text.fontColor('#999999');
+            Text.width('100%');
+        }, Text);
+        Text.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Row.create();
+            Row.debugLine("entry/src/main/ets/pages/BMIPage.ets(212:7)", "entry");
+            Row.width('100%');
+            Row.margin({ top: 8 });
+        }, Row);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            TextInput.create({ text: value, placeholder: '0' });
+            TextInput.debugLine("entry/src/main/ets/pages/BMIPage.ets(213:9)", "entry");
+            TextInput.fontSize({ "id": 16777240, "type": 10002, params: [], "bundleName": "com.example.simplecalculator", "moduleName": "entry" });
+            TextInput.fontWeight(FontWeight.Bold);
+            TextInput.textAlign(TextAlign.Center);
+            TextInput.type(InputType.Number);
+            TextInput.backgroundColor('#FAFAFA');
+            TextInput.layoutWeight(1);
+            TextInput.height(52);
+            TextInput.borderRadius(8);
+            TextInput.border({ width: 1, color: '#E0E0E0' });
+            TextInput.onChange(onChange);
+        }, TextInput);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Text.create(unit);
+            Text.debugLine("entry/src/main/ets/pages/BMIPage.ets(220:9)", "entry");
+            Text.fontSize({ "id": 16777261, "type": 10002, params: [], "bundleName": "com.example.simplecalculator", "moduleName": "entry" });
+            Text.fontColor('#666666');
+            Text.margin({ left: 12 });
+            Text.width(50);
+        }, Text);
+        Text.pop();
+        Row.pop();
+        Column.pop();
+    }
+    // ==================== ç»“æžœé¢æ¿ ====================
+    buildResultPanel(parent = null) {
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Column.create();
+            Column.debugLine("entry/src/main/ets/pages/BMIPage.ets(235:5)", "entry");
+            Column.width('100%');
+            Column.padding(24);
+            Column.backgroundColor('#FFFFFF');
+            Column.borderRadius(16);
+            Column.border({ width: 1, color: '#EEEEEE' });
+            Column.margin({ left: 16, right: 16, top: 16, bottom: 16 });
+            Column.shadow({ radius: 4, color: '#0A000000', offsetY: 2 });
+        }, Column);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            // BMI å¤§å­—
+            Text.create(this.bmiValue.toFixed(1));
+            Text.debugLine("entry/src/main/ets/pages/BMIPage.ets(237:7)", "entry");
+            // BMI å¤§å­—
+            Text.fontSize(56);
+            // BMI å¤§å­—
+            Text.fontWeight(FontWeight.Bold);
+            // BMI å¤§å­—
+            Text.fontColor(this.bmiColor);
+        }, Text);
+        // BMI å¤§å­—
+        Text.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Text.create(this.bmiCategory);
+            Text.debugLine("entry/src/main/ets/pages/BMIPage.ets(241:7)", "entry");
+            Text.fontSize({ "id": 16777266, "type": 10002, params: [], "bundleName": "com.example.simplecalculator", "moduleName": "entry" });
+            Text.fontWeight(FontWeight.Bold);
+            Text.fontColor(this.bmiColor);
+            Text.margin({ bottom: 16 });
+        }, Text);
+        Text.pop();
+        // BMI ç­‰çº§è‰²æ¡
+        this.buildBMIScale.bind(this)();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            // ç†æƒ³ä½“é‡èŒƒå›´
+            Text.create(this.idealWeight);
+            Text.debugLine("entry/src/main/ets/pages/BMIPage.ets(251:7)", "entry");
+            // ç†æƒ³ä½“é‡èŒƒå›´
+            Text.fontSize({ "id": 16777262, "type": 10002, params: [], "bundleName": "com.example.simplecalculator", "moduleName": "entry" });
+            // ç†æƒ³ä½“é‡èŒƒå›´
+            Text.fontColor('#666666');
+            // ç†æƒ³ä½“é‡èŒƒå›´
+            Text.margin({ top: 16 });
+            // ç†æƒ³ä½“é‡èŒƒå›´
+            Text.textAlign(TextAlign.Center);
+        }, Text);
+        // ç†æƒ³ä½“é‡èŒƒå›´
+        Text.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            // BMI è¯´æ˜Ž
+            Text.create(this.getBMIAdvice());
+            Text.debugLine("entry/src/main/ets/pages/BMIPage.ets(258:7)", "entry");
+            // BMI è¯´æ˜Ž
+            Text.fontSize({ "id": 16777263, "type": 10002, params: [], "bundleName": "com.example.simplecalculator", "moduleName": "entry" });
+            // BMI è¯´æ˜Ž
+            Text.fontColor('#888888');
+            // BMI è¯´æ˜Ž
+            Text.margin({ top: 12 });
+            // BMI è¯´æ˜Ž
+            Text.textAlign(TextAlign.Center);
+            // BMI è¯´æ˜Ž
+            Text.padding({ left: 8, right: 8 });
+        }, Text);
+        // BMI è¯´æ˜Ž
+        Text.pop();
+        Column.pop();
+    }
+    buildBMIScale(parent = null) {
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Column.create();
+            Column.debugLine("entry/src/main/ets/pages/BMIPage.ets(273:5)", "entry");
+            Column.width('100%');
+        }, Column);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Row.create();
+            Row.debugLine("entry/src/main/ets/pages/BMIPage.ets(274:7)", "entry");
+            Row.width('100%');
+            Row.height(24);
+            Row.borderRadius(12);
+        }, Row);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            ForEach.create();
+            const forEachItemGenFunction = _item => {
+                const level = _item;
+                this.observeComponentCreation2((elmtId, isInitialRender) => {
+                    Column.create();
+                    Column.debugLine("entry/src/main/ets/pages/BMIPage.ets(276:11)", "entry");
+                    Column.width(this.getScaleWidth(level));
+                    Column.height(24);
+                    Column.backgroundColor(level.color);
+                }, Column);
+                this.observeComponentCreation2((elmtId, isInitialRender) => {
+                    Text.create(level.min.toFixed(1));
+                    Text.debugLine("entry/src/main/ets/pages/BMIPage.ets(277:13)", "entry");
+                    Text.fontSize(10);
+                    Text.fontColor('#999999');
+                }, Text);
+                Text.pop();
+                Column.pop();
+            };
+            this.forEachUpdateFunction(elmtId, this.levels, forEachItemGenFunction);
+        }, ForEach);
+        ForEach.pop();
+        Row.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            // æŒ‡é’ˆ
+            Row.create();
+            Row.debugLine("entry/src/main/ets/pages/BMIPage.ets(288:7)", "entry");
+            // æŒ‡é’ˆ
+            Row.width('100%');
+            // æŒ‡é’ˆ
+            Row.padding({ left: this.getPointerPosition() });
+        }, Row);
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Blank.create();
+            Blank.debugLine("entry/src/main/ets/pages/BMIPage.ets(289:9)", "entry");
+        }, Blank);
+        Blank.pop();
+        this.observeComponentCreation2((elmtId, isInitialRender) => {
+            Polygon.create();
+            Polygon.debugLine("entry/src/main/ets/pages/BMIPage.ets(290:9)", "entry");
+            Polygon.points([[0, 0], [6, 10], [12, 0]]);
+            Polygon.fill(this.bmiColor);
+            Polygon.width(12);
+            Polygon.height(10);
+        }, Polygon);
+        // æŒ‡é’ˆ
+        Row.pop();
+        Column.pop();
+    }
+    // ==================== è®¡ç®—æ–¹æ³• ====================
+    calculate() {
+        let heightM;
+        let weightKg;
+        if (this.unitSystem === UnitSystem.METRIC) {
+            heightM = parseFloat(this.heightCm) / 100;
+            weightKg = parseFloat(this.weightKg);
+        }
+        else {
+            let ft = parseFloat(this.heightFt) || 0;
+            let inch = parseFloat(this.heightIn) || 0;
+            heightM = (ft * 12 + inch) * 0.0254;
+            weightKg = (parseFloat(this.weightLb) || 0) * 0.453592;
+        }
+        if (isNaN(heightM) || isNaN(weightKg) || heightM <= 0 || weightKg <= 0) {
+            this.showResult = false;
+            return;
+        }
+        let bmi = weightKg / (heightM * heightM);
+        this.bmiValue = bmi;
+        for (let i = 0; i < this.levels.length; i++) {
+            if (bmi >= this.levels[i].min && bmi < this.levels[i].max) {
+                this.bmiCategory = this.levels[i].label;
+                this.bmiColor = this.levels[i].color;
+                break;
+            }
+        }
+        // ç†æƒ³ä½“é‡èŒƒå›´ (BMI 18.5-24.9)
+        let idealLow = (18.5 * heightM * heightM);
+        let idealHigh = (24.9 * heightM * heightM);
+        if (this.unitSystem === UnitSystem.METRIC) {
+            this.idealWeight = `ç†æƒ³ä½“é‡èŒƒå›´ï¼š${idealLow.toFixed(1)} - ${idealHigh.toFixed(1)} kg`;
+        }
+        else {
+            let lowLb = idealLow / 0.453592;
+            let highLb = idealHigh / 0.453592;
+            this.idealWeight = `ç†æƒ³ä½“é‡èŒƒå›´ï¼š${lowLb.toFixed(1)} - ${highLb.toFixed(1)} lb`;
+        }
+        this.showResult = true;
+    }
+    getBMIAdvice() {
+        if (this.bmiValue < 18.5)
+            return 'æ‚¨çš„ä½“é‡åè½»ï¼Œå»ºè®®åŠ å¼ºè¥å…»æ‘„å…¥ï¼Œé€‚å½“å¢žåŠ ä½“é‡ã€‚';
+        if (this.bmiValue < 24.9)
+            return 'æ‚¨çš„ä½“é‡åœ¨æ­£å¸¸èŒƒå›´å†…ï¼Œè¯·ç»§ç»­ä¿æŒå¥åº·çš„ç”Ÿæ´»æ–¹å¼ã€‚';
+        if (this.bmiValue < 29.9)
+            return 'æ‚¨çš„ä½“é‡åé‡ï¼Œå»ºè®®æŽ§åˆ¶é¥®é£Ÿå¹¶é€‚å½“å¢žåŠ è¿åŠ¨é‡ã€‚';
+        if (this.bmiValue < 34.9)
+            return 'æ‚¨çš„ä½“é‡å±žäºŽè‚¥èƒ–èŒƒå›´ï¼Œå»ºè®®å’¨è¯¢åŒ»ç”Ÿåˆ¶å®šç§‘å­¦å‡é‡è®¡åˆ’ã€‚';
+        return 'æ‚¨çš„ä½“é‡å±žäºŽé‡åº¦è‚¥èƒ–ï¼Œå»ºè®®å°½å¿«å°±åŒ»è¿›è¡Œä¸“ä¸šå‡é‡æŒ‡å¯¼ã€‚';
+    }
+    getScaleWidth(level) {
+        let total = 40; // 0-40 BMI scale
+        let w = ((level.max - level.min) / total * 100).toFixed(1);
+        return `${w}%`;
+    }
+    getPointerPosition() {
+        let total = 40;
+        let pct = (this.bmiValue / total * 100);
+        if (pct > 95)
+            pct = 95;
+        if (pct < 2)
+            pct = 2;
+        return `${pct.toFixed(1)}%`;
+    }
+    rerender() {
+        this.updateDirtyElements();
+    }
+    static getEntryName() {
+        return "BMIPage";
+    }
+}
+registerNamedRoute(() => new BMIPage(undefined, {}), "", { bundleName: "com.example.simplecalculator", moduleName: "entry", pagePath: "pages/BMIPage", pageFullPath: "entry/src/main/ets/pages/BMIPage", integratedHsp: "false", moduleType: "followWithHap" });
+//# sourceMappingURL=BMIPage.js.mapÂ‘ÙQ hvigor_ignore_E:_DevEco Studio_sdk_default_openharmony_ets_api_@ohos.router.d.tsÙHD:\software\SimpleCalculator-master\entry\src\main\ets\pages\BMIPage.etsÔrB›ªmoduleName±isLocalDependency¯isNodeEntryFile§pkgPath±belongProjectPath§pkgNameªpkgVersion±dependencyPkgInfo°belongModulePath§checker¬shouldEmitJs¥entryÃÂÙ)D:\software\SimpleCalculator-master\entryÙ#D:\software\SimpleCalculator-master¥entry¥1.0.0Ô  Ù)D:\software\SimpleCalculator-master\entryÔrCÜ ®¬getNodeCount²getIdentifierCount®getSymbolCount¬getTypeCountµgetInstantiationCountµgetRelationCacheSizes±isUndefinedSymbol±isArgumentsSymbol¯isUnknownSymbol¯getMergedSymbol®getDiagnostics´getGlobalDiagnostics´getRecursionIdentity¶getUnmatchedProperties¹getTypeOfSymbolAtLocation¯getTypeOfSymbolÙ(getSymbolsOfParameterPropertyDeclaration·getDeclaredTypeOfSymbol³getPropertiesOfType±getPropertyOfTypeÙ"getPrivateIdentifierPropertyOfType·getTypeOfPropertyOfType²getIndexInfoOfType³getIndexInfosOfTypeºgetIndexInfosOfIndexSymbol³getSignaturesOfType²getIndexTypeOfType¬getIndexType¬getBaseTypes¸getBaseTypeOfLiteralType®getWidenedType³getTypeFromTypeNode°getParameterTypeÙ$getParameterIdentifierNameAtPosition¸getPromisedTypeOfPromise®getAwaitedType¸getReturnTypeOfSignature®isNullableType¯getNullableType²getNonNullableType²getNonOptionalType°getTypeArguments®typeToTypeNodeÙ$indexInfoToIndexSignatureDeclaration¿signatureToSignatureDeclaration²symbolToEntityName²symbolToExpression¬symbolToNodeÙ!symbolToTypeParameterDeclarations¼symbolToParameterDeclarationºtypeParameterToDeclaration±getSymbolsInScope³getSymbolAtLocation·getIndexInfosAtLocationÙ!getShorthandAssignmentValueSymbolÙ#getExportSpecifierLocalTargetSymbol·getExportSymbolOfSymbol±getTypeAtLocationºgetTypeAtLocationForLinterÙ tryGetTypeAtLocationWithoutCheckºgetTypeOfAssignmentPatternÙ*getPropertySymbolOfDestructuringAssignment±signatureToString¬typeToString®symbolToStringµtypePredicateToString®writeSignature©writeType«writeSymbol²writeTypePredicate¼getAugmentedPropertiesOfType®getRootSymbols²getSymbolOfExpando±getContextualTypeÙ(getContextualTypeForObjectLiteralElementÙ#getContextualTypeForArgumentAtIndexÙ getContextualTypeForJsxAttribute²isContextSensitiveÙ!getTypeOfPropertyOfContextualTypeµgetFullyQualifiedNameÙ#tryGetResolvedSignatureWithoutCheck´getResolvedSignatureÙ/getResolvedSignatureForStringLiteralCompletionsÙ$getResolvedSignatureForSignatureHelpµgetExpandedParameters¹hasEffectiveRestParameterºcontainsArgumentsReference°getConstantValueµisValidPropertyAccessÙ#isValidPropertyAccessForCompletions»getSignatureFromDeclarationºisImplementationOfOverload¹getImmediateAliasedSymbol°getAliasedSymbol¯getEmitResolver²getExportsOfModule¿getExportsAndPropertiesOfModuleÙ forEachExportAndPropertyOfModule¯getSymbolWalker±getAmbientModules¹getJsxIntrinsicTagNamesAt³isOptionalParameter»tryGetMemberInModuleExportsÙ(tryGetMemberInModuleExportsAndProperties´tryFindAmbientModuleÙ(tryFindAmbientModuleWithoutAugmentations¯getApparentType¬getUnionType²isTypeAssignableTo³createAnonymousType¯createSignature¬createSymbol¯createIndexInfoªgetAnyType­getStringType­getNumberType±createPromiseType¯createArrayType¹getElementTypeOfArrayType®getBooleanType¬getFalseType«getTrueType«getVoidType°getUndefinedType«getNullType¯getESSymbolType¬getNeverType¯getOptionalType®getPromiseType²getPromiseLikeType´getAsyncIterableType²isSymbolAccessible«isArrayType«isTupleType¯isArrayLikeTypeÙ#isTypeInvalidDueToUnionDiscriminantºgetExactOptionalProperties¿getAllPossiblePropertiesOfTypesÙ(getSuggestedSymbolForNonexistentPropertyÙ#getSuggestionForNonexistentPropertyÙ,getSuggestedSymbolForNonexistentJSXAttributeÙ&getSuggestedSymbolForNonexistentSymbolÙ!getSuggestionForNonexistentSymbolÙ&getSuggestedSymbolForNonexistentModuleÙ!getSuggestionForNonexistentExportÙ+getSuggestedSymbolForNonexistentClassMember·getBaseConstraintOfType»getDefaultFromTypeParameter«resolveName¯getJsxNamespaceµgetJsxFragmentFactory¸getAccessibleSymbolChain»getTypePredicateOfSignature¹resolveExternalModuleName»resolveExternalModuleSymbol°tryGetThisTypeAt¹getTypeArgumentConstraint¸getSuggestionDiagnostics¸runWithCancellationTokenÙ3getLocalTypeParametersOfClassOrInterfaceOrTypeAlias´isDeclarationVisible´isPropertyAccessible»getTypeOnlyAliasDeclaration¿getMemberOverrideModifierStatusÙ!isTypeParameterPossiblyReferenced²getConstEnumRelate´clearConstEnumRelateµdeleteConstEnumRelateÙ$getTypeArgumentsForResolvedSignatureµgetCheckedSourceFilesÙ"collectHaveTsNoCheckFilesForLinter·clearQualifiedNameCache®isStaticRecord²isStaticSourceFileÔ  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  ÃÃÚ,í/*
+ * BMI Calculator Page - BMIè®¡ç®—é¡µé¢
+ * æ”¯æŒå…¬åˆ¶(kg/cm)å’Œè‹±åˆ¶(lb/ft+in)
+ */
+
+import router from '@ohos.router';
+
+enum UnitSystem {
+  METRIC = 'å…¬åˆ¶',
+  IMPERIAL = 'è‹±åˆ¶'
+}
+
+class BMILevel {
+  label: string;
+  min: number;
+  max: number;
+  color: string;
+
+  constructor(label: string, min: number, max: number, color: string) {
+    this.label = label;
+    this.min = min;
+    this.max = max;
+    this.color = color;
+  }
+}
+
+@Entry
+@Component
+struct BMIPage {
+  @State unitSystem: UnitSystem = UnitSystem.METRIC;
+
+  // å…¬åˆ¶
+  @State heightCm: string = '170';
+  @State weightKg: string = '65';
+
+  // è‹±åˆ¶
+  @State heightFt: string = '5';
+  @State heightIn: string = '7';
+  @State weightLb: string = '143';
+
+  // ç»“æžœ
+  @State bmiValue: number = 0;
+  @State bmiCategory: string = '';
+  @State bmiColor: string = '#4CAF50';
+  @State idealWeight: string = '';
+  @State showResult: boolean = false;
+
+  private levels: BMILevel[] = [
+    new BMILevel('åç˜¦', 0, 18.5, '#2196F3'),
+    new BMILevel('æ­£å¸¸', 18.5, 24.9, '#4CAF50'),
+    new BMILevel('åé‡', 25, 29.9, '#FF9800'),
+    new BMILevel('è‚¥èƒ–', 30, 34.9, '#FF5722'),
+    new BMILevel('é‡åº¦è‚¥èƒ–', 35, 100, '#F44336'),
+  ];
+
+  aboutToAppear(): void {
+    this.calculate();
+  }
+
+  build() {
+    Column() {
+      this.buildHeader();
+
+      Scroll() {
+        Column() {
+          // å•ä½åˆ¶åˆ‡æ¢
+          this.buildUnitToggle();
+
+          if (this.unitSystem === UnitSystem.METRIC) {
+            this.buildMetricInputs();
+          } else {
+            this.buildImperialInputs();
+          }
+
+          // è®¡ç®—æŒ‰é’®
+          Button('è®¡ç®— BMI')
+            .fontSize($r('app.float.font_size_body'))
+            .fontColor(Color.White)
+            .backgroundColor('#007DFF')
+            .width('100%')
+            .height(48)
+            .borderRadius(12)
+            .margin({ top: 12, left: 16, right: 16 })
+            .onClick(() => { this.calculate(); })
+
+          // ç»“æžœå±•ç¤º
+          if (this.showResult) {
+            this.buildResultPanel();
+          }
+        }
+        .width('100%')
+      }
+      .layoutWeight(1)
+      .width('100%')
+    }
+    .width('100%')
+    .height('100%')
+    .backgroundColor('#F1F3F5')
+  }
+
+  @Builder
+  buildHeader() {
+    Row() {
+      Button({ type: ButtonType.Circle }) {
+        Text('â†').fontSize($r('app.float.font_size_title_large')).fontColor('#333333')
+      }
+      .width($r('app.float.icon_size_back')).height($r('app.float.icon_size_back'))
+      .backgroundColor(Color.Transparent)
+      .onClick(() => { router.back(); })
+
+      Text('BMI è®¡ç®—')
+        .fontSize($r('app.float.font_size_title_large')).fontWeight(FontWeight.Bold)
+        .fontColor('#1A1A1A').margin({ left: 8 })
+    }
+    .width('100%').height($r('app.float.page_header_height'))
+    .padding({ left: 16, right: 16 }).backgroundColor('#FFFFFF')
+    .shadow({ radius: 4, color: '#10000000', offsetY: 2 })
+  }
+
+  @Builder
+  buildUnitToggle() {
+    Row() {
+      Button(UnitSystem.METRIC)
+        .fontSize($r('app.float.font_size_caption'))
+        .fontColor(this.unitSystem === UnitSystem.METRIC ? Color.White : '#666666')
+        .backgroundColor(this.unitSystem === UnitSystem.METRIC ? '#007DFF' : '#F5F5F5')
+        .borderRadius(20).height(36)
+        .padding({ left: 20, right: 20 })
+        .border({ width: 1, color: this.unitSystem === UnitSystem.METRIC ? '#007DFF' : '#E0E0E0' })
+        .onClick(() => { this.unitSystem = UnitSystem.METRIC; })
+
+      Button(UnitSystem.IMPERIAL)
+        .fontSize($r('app.float.font_size_caption'))
+        .fontColor(this.unitSystem === UnitSystem.IMPERIAL ? Color.White : '#666666')
+        .backgroundColor(this.unitSystem === UnitSystem.IMPERIAL ? '#007DFF' : '#F5F5F5')
+        .borderRadius(20).height(36)
+        .padding({ left: 20, right: 20 })
+        .margin({ left: 8 })
+        .border({ width: 1, color: this.unitSystem === UnitSystem.IMPERIAL ? '#007DFF' : '#E0E0E0' })
+        .onClick(() => { this.unitSystem = UnitSystem.IMPERIAL; })
+    }
+    .width('100%')
+    .justifyContent(FlexAlign.Center)
+    .padding({ top: 12, bottom: 8 })
+  }
+
+  @Builder
+  buildMetricInputs() {
+    Column() {
+      this.buildInputCard('èº«é«˜', this.heightCm, 'cm',
+        (v) => { this.heightCm = v; });
+      this.buildInputCard('ä½“é‡', this.weightKg, 'kg',
+        (v) => { this.weightKg = v; });
+    }
+    .padding({ left: 16, right: 16 })
+  }
+
+  @Builder
+  buildImperialInputs() {
+    Column() {
+      // èº«é«˜ - ft + in
+      Column() {
+        Text('èº«é«˜')
+          .fontSize($r('app.float.font_size_tiny')).fontColor('#999999')
+          .width('100%')
+
+        Row() {
+          Column() {
+            TextInput({ text: this.heightFt, placeholder: '0' })
+              .fontSize($r('app.float.font_size_result')).fontWeight(FontWeight.Bold)
+              .textAlign(TextAlign.Center).type(InputType.Number)
+              .backgroundColor('#FAFAFA').width('100%').height(52)
+              .borderRadius(8).border({ width: 1, color: '#E0E0E0' })
+              .onChange((v) => { this.heightFt = v; })
+            Text('è‹±å°º (ft)')
+              .fontSize($r('app.float.font_size_tiny')).fontColor('#999999').margin({ top: 4 })
+          }
+          .layoutWeight(1)
+
+          Column() {
+            TextInput({ text: this.heightIn, placeholder: '0' })
+              .fontSize($r('app.float.font_size_result')).fontWeight(FontWeight.Bold)
+              .textAlign(TextAlign.Center).type(InputType.Number)
+              .backgroundColor('#FAFAFA').width('100%').height(52)
+              .borderRadius(8).border({ width: 1, color: '#E0E0E0' })
+              .margin({ left: 12 })
+              .onChange((v) => { this.heightIn = v; })
+            Text('è‹±å¯¸ (in)')
+              .fontSize($r('app.float.font_size_tiny')).fontColor('#999999').margin({ top: 4 })
+          }
+          .layoutWeight(1)
+        }
+        .width('100%').margin({ top: 8 })
+      }
+      .width('100%').padding(16).backgroundColor('#FFFFFF')
+      .borderRadius(16).border({ width: 1, color: '#EEEEEE' })
+      .margin({ bottom: 12 })
+
+      this.buildInputCard('ä½“é‡', this.weightLb, 'ç£… (lb)',
+        (v) => { this.weightLb = v; });
+    }
+    .padding({ left: 16, right: 16 })
+  }
+
+  @Builder
+  buildInputCard(label: string, value: string, unit: string, onChange: (v: string) => void) {
+    Column() {
+      Text(label)
+        .fontSize($r('app.float.font_size_tiny')).fontColor('#999999')
+        .width('100%')
+
+      Row() {
+        TextInput({ text: value, placeholder: '0' })
+          .fontSize($r('app.float.font_size_input')).fontWeight(FontWeight.Bold)
+          .textAlign(TextAlign.Center).type(InputType.Number)
+          .backgroundColor('#FAFAFA').layoutWeight(1).height(52)
+          .borderRadius(8).border({ width: 1, color: '#E0E0E0' })
+          .onChange(onChange)
+
+        Text(unit)
+          .fontSize($r('app.float.font_size_body')).fontColor('#666666')
+          .margin({ left: 12 }).width(50)
+      }
+      .width('100%').margin({ top: 8 })
+    }
+    .width('100%').padding(16).backgroundColor('#FFFFFF')
+    .borderRadius(16).border({ width: 1, color: '#EEEEEE' })
+    .margin({ bottom: 12 })
+  }
+
+  // ==================== ç»“æžœé¢æ¿ ====================
+
+  @Builder
+  buildResultPanel() {
+    Column() {
+      // BMI å¤§å­—
+      Text(this.bmiValue.toFixed(1))
+        .fontSize(56).fontWeight(FontWeight.Bold)
+        .fontColor(this.bmiColor)
+
+      Text(this.bmiCategory)
+        .fontSize($r('app.float.font_size_title_medium'))
+        .fontWeight(FontWeight.Bold)
+        .fontColor(this.bmiColor)
+        .margin({ bottom: 16 })
+
+      // BMI ç­‰çº§è‰²æ¡
+      this.buildBMIScale()
+
+      // ç†æƒ³ä½“é‡èŒƒå›´
+      Text(this.idealWeight)
+        .fontSize($r('app.float.font_size_caption'))
+        .fontColor('#666666')
+        .margin({ top: 16 })
+        .textAlign(TextAlign.Center)
+
+      // BMI è¯´æ˜Ž
+      Text(this.getBMIAdvice())
+        .fontSize($r('app.float.font_size_small'))
+        .fontColor('#888888')
+        .margin({ top: 12 })
+        .textAlign(TextAlign.Center)
+        .padding({ left: 8, right: 8 })
+    }
+    .width('100%').padding(24).backgroundColor('#FFFFFF')
+    .borderRadius(16).border({ width: 1, color: '#EEEEEE' })
+    .margin({ left: 16, right: 16, top: 16, bottom: 16 })
+    .shadow({ radius: 4, color: '#0A000000', offsetY: 2 })
+  }
+
+  @Builder
+  buildBMIScale() {
+    Column() {
+      Row() {
+        ForEach(this.levels, (level: BMILevel) => {
+          Column() {
+            Text(level.min.toFixed(1))
+              .fontSize(10).fontColor('#999999')
+          }
+          .width(this.getScaleWidth(level))
+          .height(24)
+          .backgroundColor(level.color)
+        })
+      }
+      .width('100%').height(24).borderRadius(12)
+
+      // æŒ‡é’ˆ
+      Row() {
+        Blank()
+        Polygon()
+          .points([[0, 0], [6, 10], [12, 0]])
+          .fill(this.bmiColor)
+          .width(12).height(10)
+      }
+      .width('100%')
+      .padding({ left: this.getPointerPosition() })
+    }
+    .width('100%')
+  }
+
+  // ==================== è®¡ç®—æ–¹æ³• ====================
+
+  private calculate(): void {
+    let heightM: number;
+    let weightKg: number;
+
+    if (this.unitSystem === UnitSystem.METRIC) {
+      heightM = parseFloat(this.heightCm) / 100;
+      weightKg = parseFloat(this.weightKg);
+    } else {
+      let ft = parseFloat(this.heightFt) || 0;
+      let inch = parseFloat(this.heightIn) || 0;
+      heightM = (ft * 12 + inch) * 0.0254;
+      weightKg = (parseFloat(this.weightLb) || 0) * 0.453592;
+    }
+
+    if (isNaN(heightM) || isNaN(weightKg) || heightM <= 0 || weightKg <= 0) {
+      this.showResult = false;
+      return;
+    }
+
+    let bmi = weightKg / (heightM * heightM);
+    this.bmiValue = bmi;
+
+    for (let i = 0; i < this.levels.length; i++) {
+      if (bmi >= this.levels[i].min && bmi < this.levels[i].max) {
+        this.bmiCategory = this.levels[i].label;
+        this.bmiColor = this.levels[i].color;
+        break;
+      }
+    }
+
+    // ç†æƒ³ä½“é‡èŒƒå›´ (BMI 18.5-24.9)
+    let idealLow = (18.5 * heightM * heightM);
+    let idealHigh = (24.9 * heightM * heightM);
+
+    if (this.unitSystem === UnitSystem.METRIC) {
+      this.idealWeight = `ç†æƒ³ä½“é‡èŒƒå›´ï¼š${idealLow.toFixed(1)} - ${idealHigh.toFixed(1)} kg`;
+    } else {
+      let lowLb = idealLow / 0.453592;
+      let highLb = idealHigh / 0.453592;
+      this.idealWeight = `ç†æƒ³ä½“é‡èŒƒå›´ï¼š${lowLb.toFixed(1)} - ${highLb.toFixed(1)} lb`;
+    }
+
+    this.showResult = true;
+  }
+
+  private getBMIAdvice(): string {
+    if (this.bmiValue < 18.5) return 'æ‚¨çš„ä½“é‡åè½»ï¼Œå»ºè®®åŠ å¼ºè¥å…»æ‘„å…¥ï¼Œé€‚å½“å¢žåŠ ä½“é‡ã€‚';
+    if (this.bmiValue < 24.9) return 'æ‚¨çš„ä½“é‡åœ¨æ­£å¸¸èŒƒå›´å†…ï¼Œè¯·ç»§ç»­ä¿æŒå¥åº·çš„ç”Ÿæ´»æ–¹å¼ã€‚';
+    if (this.bmiValue < 29.9) return 'æ‚¨çš„ä½“é‡åé‡ï¼Œå»ºè®®æŽ§åˆ¶é¥®é£Ÿå¹¶é€‚å½“å¢žåŠ è¿åŠ¨é‡ã€‚';
+    if (this.bmiValue < 34.9) return 'æ‚¨çš„ä½“é‡å±žäºŽè‚¥èƒ–èŒƒå›´ï¼Œå»ºè®®å’¨è¯¢åŒ»ç”Ÿåˆ¶å®šç§‘å­¦å‡é‡è®¡åˆ’ã€‚';
+    return 'æ‚¨çš„ä½“é‡å±žäºŽé‡åº¦è‚¥èƒ–ï¼Œå»ºè®®å°½å¿«å°±åŒ»è¿›è¡Œä¸“ä¸šå‡é‡æŒ‡å¯¼ã€‚';
+  }
+
+  private getScaleWidth(level: BMILevel): string {
+    let total = 40; // 0-40 BMI scale
+    let w = ((level.max - level.min) / total * 100).toFixed(1);
+    return `${w}%`;
+  }
+
+  private getPointerPosition(): string {
+    let total = 40;
+    let pct = (this.bmiValue / total * 100);
+    if (pct > 95) pct = 95;
+    if (pct < 2) pct = 2;
+    return `${pct.toFixed(1)}%`;
+  }
+}
+ÀÔrD‘¬@ohos.routerÔrE—ªassertions¨external¢id¤meta±moduleSideEffectsªresolvedByµsyntheticNamedExportsAÃÙQ hvigor_ignore_E:_DevEco Studio_sdk_default_openharmony_ets_api_@ohos.router.d.tsAÃªoh-resolveÂ“ÔrF–§version¤fileªsourceRoot§sources¥names¨mappingsªBMIPage.js ‘«BMIPage.etsÜ¸‘”    ‘” –”   ” ” ” ”! !”" "“”   ” ” 
+“”   ” ” “” ”) ”* “” 	”+ 	”, 	—”  
+ ” 
+” ” ” ” ”$ 
+“”   ” ” ™” ” ” ” ” (” *” 5”! 7”& ÌD—” ” ” 	” ” ” ” —” ” ” 	” ” ” ” —” ” ” 	” ” ” ” —” ” ” 	” ” ” ” ’” ” ‘” ’” ” ‘”  ””9 "”ÌC ,”ÌD -”ÌJ 3’”7  ”<  !’”7 !”; ! ’”7 $”: $’”7 %”: %’”7 &”< &!’”7 )”8 )’”: *”< *!’”7 +”Ì@ +%’”: ,”< ,!’”9 -”> -$‘” /œ” 0” 0” 0” 0” 0” 0”  0”" 0”& 0”( 0 ”1 0)”2 0*œ” 1” 1” 1” 1” 1” 1”# 1”% 1”) 1!”+ 1#”4 1,”5 1-œ” 2” 2” 2” 2” 2” 2”! 2”# 2”' 2”) 2!”2 2*”3 2+œ” 3” 3” 3” 3” 3” 3”! 3”# 3”' 3”) 3!”2 3*”3 3+œ” 4” 4” 4” 4” 4”! 4”# 4”% 4”( 4 ”* 4"”3 4+”4 4,‘”	 5‘” ’” 	” ’” 	” ’”  	”  ’”  	”  ’” !	” !’” !	” !’” $	” $’” $	” $’” %	” %’” %	” %’” &	” &’” &	” &’” )	” )’” )	” )’” *	” *’” *	” *’” +	” +’” +	” +’” ,	” ,’” ,	” ,’” -	” -’” -	” -’” 7” 7–” 8” 8” 8	” 8” 8” 8’” 9” 9‘” ;’” <” <
+–” <” <
+” Ì_” Ì_
+” Ì_” Ì_–” <” <
+” Ì`” Ì`” Ì`”  Ì`–” <” <
+” Ìa”" Ìa”# Ìa”, Ìa•” =” =
+” =” =”% =’” ?” ?–” ?” ?” Ì\” Ì\”  Ì\”! Ì\–” ?” ?” Ì]” Ì]” Ì]” Ì]’” Ì@” Ì@–” Ì@” Ì@” ÌZ	” ÌZ” ÌZ” ÌZ’” ÌA
+” ÌA•” ÌB
+” ÌB” ÌB” ÌB”) ÌB š” ÌD
+” ÌD” ÌD” ÌD” ÌD”$ ÌD"”. ÌD,”/ ÌD-”5 ÌD3”7 ÌD5•” ÌE” ÌE” ÌE”* ÌE"”7 ÌE$‘” ÌF‘” ÌF•” ÌG” ÌG” ÌG”, ÌG$”9 ÌG&‘” ÌH’” ÌJ
+” ÌJ”” ÌK
+” ÌK”# ÌK”+ ÌK’” ÌJ
+” ÌJ”” ÌK
+” ÌK” ÌL” ÌL’” ÌJ
+” ÌJ˜” ÌK
+” ÌK” ÌM” ÌM” ÌM”" ÌM”# ÌM”( ÌM"’” ÌJ
+” ÌJ–” ÌK
+” ÌK” ÌN”" ÌN”# ÌN”, ÌN&’” ÌJ
+” ÌJ–” ÌK
+” ÌK” ÌO” ÌO” ÌO” ÌO’” ÌJ
+” ÌJ–” ÌK
+” ÌK” ÌP” ÌP” ÌP” ÌP’” ÌJ
+” ÌJ–” ÌK
+” ÌK” ÌQ” ÌQ”  ÌQ”" ÌQ’” ÌJ
+” ÌJÜ ” ÌK
+” ÌK” ÌR” ÌR” ÌR” ÌR” ÌR”! ÌR”# ÌR”% ÌR”) ÌR#”+ ÌR%”- ÌR'”/ ÌR)”4 ÌR.”6 ÌR0”8 ÌR2”: ÌR4’” ÌJ
+” ÌJŸ” ÌK
+” ÌK” ÌS” ÌS” ÌS” ÌS”  ÌS”# ÌS”' ÌS!”( ÌS"”1 ÌS+”3 ÌS-”4 ÌS.”5 ÌS/”6 ÌS0’” ÌJ
+” ÌJ’” ÌK
+” ÌK’” ÌU
+” ÌU–” ÌV
+” ÌV” ÌV” ÌV” ÌV”! ÌV•” ÌW” ÌW” ÌW”) ÌW!”6 ÌW#‘” ÌX‘” ÌX’” Ì@” Ì@’” ?” ?’” <” <
+‘” Ìb’” Ìe” Ìe’” Ìf” Ìf–” Ìf” Ìf” Ìr” Ìr
+” Ìr” Ìr”” Ìf” Ìf” Ìr” Ìrž” Ìf” Ìf” Ìs” Ìs” Ìs” Ìs” Ìs”  Ìs”" Ìs”$ Ìs”) Ìs”+ Ìs ”- Ìs"”/ Ìs$–” Ìf” Ìf” Ìs&” Ìs5”  Ìs6”) Ìs?Ü ” Ìf” Ìf” Ìt” Ìt” Ìt” Ìt” Ìt”! Ìt”" Ìt”$ Ìt”) Ìt”+ Ìt ”6 Ìt+”8 Ìt-”? Ìt4”ÌA Ìt6”ÌB Ìt7”ÌD Ìt9š” Ìg” Ìg”# Ìg”% Ìg”) Ìg”+ Ìg”5 Ìg”6 Ìg ”< Ìg&”> Ìg(”” Ìg” Ìg” Ìj” Ìj”” Ìg” Ìg” Ìj-” Ìj3˜” Ìg” Ìg” Ìk”" Ìk”# Ìk”( Ìk”) Ìk”4 Ìk(Ÿ” Ìg” Ìg” Ìl” Ìl” Ìl” Ìl”  Ìl”# Ìl”) Ìl”* Ìl”. Ìl"”0 Ìl$”1 Ìl%”2 Ìl&”3 Ìl'”” Ìh” Ìh” Ìh” Ìh”” Ìh” Ìh” Ìh” Ìh–” Ìh” Ìh” ÌhÌB” ÌhÌK” ÌhÌL”$ ÌhÌU’” Ìh” Ìh’” Ìg” Ìg”” Ìn” Ìn
+” Ìn”  Ìn”” Ìn” Ìn
+” Ìo	” Ìo˜” Ìn” Ìn
+” Ìo9” ÌoÌC” ÌoÌD”& ÌoÌN”' ÌoÌO”+ ÌoÌS–” Ìn” Ìn
+” Ìp	” Ìp” Ìp”$ Ìpš” Ìn” Ìn
+” Ìp” Ìp$” Ìp%” Ìp'” Ìp+”  Ìp-”! Ìp.”# Ìp0’” Ìn” Ìn
+’” Ìf” Ìf‘” Ìu’” Ìx” Ìx’” Ìy” Ìy–” Ìy” Ìy” Ì” Ì
+” Ì” Ì˜” Ìy” Ìy” ÌŽ” ÌŽ” ÌŽ”( ÌŽ”) ÌŽ”/ ÌŽ$ž” Ìy” Ìy” Ì” Ì” Ì” Ì” Ì” Ì”! Ì”# Ì”) Ì”+ Ì ”, Ì!”. Ì#–” Ìz” Ìz”# Ìz”- Ìz”. Ìz”4 Ìz”” Ìz” Ìz” Ì{	” Ì{Ü ” Ìz” Ìz” Ì|	” Ì|” Ì|”! Ì|”" Ì|”, Ì|"”1 Ì|'”; Ì|1”< Ì|2”ÌB Ì|8”ÌC Ì|9”ÌD Ì|:”ÌE Ì|;”ÌJ Ì|Ì@”ÌK Ì|ÌA”ÌP Ì|ÌF”ÌQ Ì|ÌG”ÌR Ì|ÌH”ÌS Ì|ÌI”Ì\ Ì|ÌRÜ ” Ìz” Ìz” Ì}	”" Ì}”# Ì}”' Ì}”( Ì}”2 Ì}(”7 Ì}-”ÌA Ì}7”ÌB Ì}8”ÌH Ì}>”ÌI Ì}?”ÌJ Ì}Ì@”ÌK Ì}ÌA”ÌT Ì}ÌJ”ÌU Ì}ÌK”ÌV Ì}ÌL”ÌW Ì}ÌM”Ì` Ì}ÌV–” Ìz” Ìz” Ì~	” Ì~”  Ì~”" Ì~–” Ìz” Ìz” Ì~” Ì~ ” Ì~!” Ì~#ž” Ìz” Ìz” Ì	” Ì” Ì” Ì”! Ì”# Ì”% Ì”' Ì”, Ì"”. Ì$”0 Ì&”2 Ì(Ü ” Ìz” Ìz” Ì€	” Ì€” Ì€” Ì€”! Ì€”# Ì€”$ Ì€”& Ì€”+ Ì€!”- Ì€#”1 Ì€'”2 Ì€(”< Ì€2”ÌA Ì€7”ÌK Ì€ÌA”ÌL Ì€ÌB”ÌR Ì€ÌH”ÌS Ì€ÌI”ÌT Ì€ÌJ”ÌU Ì€ÌK”Ì^ Ì€ÌT”Ì_ Ì€ÌU”Ì` Ì€ÌV”Ìa Ì€ÌW”Ìj Ì€Ì`”Ìl Ì€ÌbÜ ” Ìz” Ìz” Ì	” Ì” Ì” Ì”  Ì”# Ì”' Ì”( Ì”2 Ì(”5 Ì+”? Ì5”Ì@ Ì6”ÌF Ì<”ÌG Ì=”ÌH Ì>”ÌI Ì?’” Ìz” Ìz–” Ìƒ” Ìƒ”# Ìƒ”- Ìƒ”. Ìƒ”6 Ìƒ ”” Ìƒ” Ìƒ” Ì„	” Ì„Ü ” Ìƒ” Ìƒ” Ì…	” Ì…” Ì…”! Ì…”" Ì…”, Ì…"”1 Ì…'”; Ì…1”< Ì…2”ÌD Ì…:”ÌE Ì…;”ÌF Ì…<”ÌG Ì…=”ÌL Ì…ÌB”ÌM Ì…ÌC”ÌR Ì…ÌH”ÌS Ì…ÌI”ÌT Ì…ÌJ”ÌU Ì…ÌK”Ì^ Ì…ÌTÜ ” Ìƒ” Ìƒ” Ì†	”" Ì†”# Ì†”' Ì†”( Ì†”2 Ì†(”7 Ì†-”ÌA Ì†7”ÌB Ì†8”ÌJ Ì†Ì@”ÌK Ì†ÌA”ÌL Ì†ÌB”ÌM Ì†ÌC”ÌV Ì†ÌL”ÌW Ì†ÌM”ÌX Ì†ÌN”ÌY Ì†ÌO”Ìb Ì†ÌX–” Ìƒ” Ìƒ” Ì‡	” Ì‡”  Ì‡”" Ì‡–” Ìƒ” Ìƒ” Ì‡” Ì‡ ” Ì‡!” Ì‡#ž” Ìƒ” Ìƒ” Ìˆ	” Ìˆ” Ìˆ” Ìˆ”! Ìˆ”# Ìˆ”% Ìˆ”' Ìˆ”, Ìˆ"”. Ìˆ$”0 Ìˆ&”2 Ìˆ(š” Ìƒ” Ìƒ” Ì‰	” Ì‰” Ì‰” Ì‰”  Ì‰”" Ì‰”# Ì‰”% Ì‰Ü ” Ìƒ” Ìƒ” ÌŠ	” ÌŠ” ÌŠ” ÌŠ”! ÌŠ”# ÌŠ”$ ÌŠ”& ÌŠ”+ ÌŠ!”- ÌŠ#”1 ÌŠ'”2 ÌŠ(”< ÌŠ2”ÌA ÌŠ7”ÌK ÌŠÌA”ÌL ÌŠÌB”ÌT ÌŠÌJ”ÌU ÌŠÌK”ÌV ÌŠÌL”ÌW ÌŠÌM”Ì` ÌŠÌV”Ìa ÌŠÌW”Ìb ÌŠÌX”Ìc ÌŠÌY”Ìl ÌŠÌb”Ìn ÌŠÌdÜ ” Ìƒ” Ìƒ” Ì‹	” Ì‹” Ì‹” Ì‹”  Ì‹”# Ì‹”' Ì‹”( Ì‹”2 Ì‹(”5 Ì‹+”? Ì‹5”Ì@ Ì‹6”ÌH Ì‹>”ÌI Ì‹?”ÌJ Ì‹Ì@”ÌK Ì‹ÌA’” Ìƒ” Ìƒ’” Ìy” Ìy‘” Ì’” Ì“” Ì“’” Ì”” Ì”
+ž” Ì”” Ì”
+” Ìš” Ìš” Ìš” Ìš”! Ìš”# Ìš”% Ìš”' Ìš”, Ìš”. Ìš ”0 Ìš"”2 Ìš$Ü ” Ì•” Ì•
+” Ì•” Ì•”' Ì•”+ Ì•”- Ì• ”1 Ì•$”2 Ì•%”: Ì•-”< Ì•/”Ì@ Ì•3”ÌB Ì–”ÌC Ì–	”ÌD Ì–
+”ÌF Ì–”ÌH Ì–”ÌK Ì–”ÌO Ì–”ÌP Ì–”ÌX Ì–”Ì[ Ì–!”Ì\ Ì–"”Ì] Ì–#”Ì^ Ì–$”Ì_ Ì–%”Ì` Ì–&Ü ” Ì—” Ì—
+” Ì—” Ì—”' Ì—”+ Ì—”- Ì— ”1 Ì—$”2 Ì—%”: Ì—-”< Ì—/”Ì@ Ì—3”ÌB Ì˜”ÌC Ì˜	”ÌD Ì˜
+”ÌF Ì˜”ÌH Ì˜”ÌK Ì˜”ÌO Ì˜”ÌP Ì˜”ÌX Ì˜”Ì[ Ì˜!”Ì\ Ì˜"”Ì] Ì˜#”Ì^ Ì˜$”Ì_ Ì˜%”Ì` Ì˜&’” Ì”” Ì”
+‘” Ì›’” Ìž” Ìž’” ÌŸ” ÌŸ
+ž” ÌŸ” ÌŸ
+” ÌÉ” ÌÉ” ÌÉ” ÌÉ”! ÌÉ”# ÌÉ”% ÌÉ”' ÌÉ”, ÌÉ”. ÌÉ ”0 ÌÉ"”2 ÌÉ$’” Ì ” Ì ’” Ì¡” Ì¡’” Ì ” Ì –” Ì¡” Ì¡” ÌÂ” ÌÂ” ÌÂ” ÌÂ’” Ì ” Ì –” Ì¡” Ì¡” ÌÂ” ÌÂ” ÌÂ” ÌÂ’” Ì ” Ì –” Ì¡” Ì¡” ÌÂ!”" ÌÂ0”# ÌÂ1”, ÌÂ:’” Ì ” Ì –” Ì¡” Ì¡” ÌÃ” ÌÃ”  ÌÃ”" ÌÃ’” Ì ” Ì ž” Ì¡” Ì¡” ÌÃ” ÌÃ” ÌÃ” ÌÃ!”! ÌÃ&”# ÌÃ(”$ ÌÃ)”& ÌÃ+”+ ÌÃ0”- ÌÃ2”6 ÌÃ;”8 ÌÃ=’” Ì ” Ì š” Ì¡” Ì¡” ÌÄ” ÌÄ” ÌÄ” ÌÄ”" ÌÄ”$ ÌÄ”& ÌÄ”( ÌÄ”” Ì¢” Ì¢” Ì¢” Ì¢”” Ì¢” Ì¢” Ì£” Ì£–” Ì¢” Ì¢” Ì£4” Ì£=” Ì£>”$ Ì£ÌG–” Ì¢” Ì¢” Ì¤” Ì¤” Ì¤” Ì¤’” Ì¢” Ì¢’” Ì¦” Ì¦–” Ì¦” Ì¦” ÌÀ	” ÌÀ” ÌÀ” ÌÀš” Ì¦” Ì¦” ÌÀ” ÌÀ” ÌÀ” ÌÀ ” ÌÀ#” ÌÀ%” ÌÀ&”! ÌÀ(’” Ì§
+” Ì§–” Ì§
+” Ì§” Ì±” Ì±”  Ì±”! Ì±ž” Ì¨” Ì¨” Ì¨” Ì¨”# Ì¨”% Ì¨”) Ì¨"”* Ì¨#”2 Ì¨+”4 Ì¨-”? Ì¨8”ÌA Ì¨:”ÌD Ì¨=”ÌF Ì¨?”” Ì¨” Ì¨” Ì©” Ì©˜” Ì¨” Ì¨” Ì©:”  Ì©ÌD”! Ì©ÌE”+ Ì©ÌO”, Ì©ÌP”0 Ì©ÌT˜” Ì¨” Ì¨” Ìª” Ìª”  Ìª”) Ìª"”* Ìª#”0 Ìª)˜” Ì¨” Ì¨” Ìª+” Ìª/” Ìª0”$ Ìª9”% Ìª:”+ ÌªÌ@–” Ì¨” Ì¨” Ì«”% Ì«”& Ì«”/ Ì«(–” Ì¨” Ì¨” Ì«*” Ì«/” Ì«0”" Ì«6–” Ì¨” Ì¨” Ì«8” Ì«>” Ì«?” Ì«ÌA–” Ì¨” Ì¨” Ì¬”" Ì¬”# Ì¬”$ Ì¬ž” Ì¨” Ì¨” Ì¬” Ì¬%” Ì¬&” Ì¬(”$ Ì¬-”& Ì¬/”' Ì¬0”) Ì¬2”. Ì¬7”0 Ì¬9”9 Ì¬ÌB”; Ì¬ÌDÜ ” Ì¨” Ì¨” Ì­” Ì­” Ì­”  Ì­”! Ì­”# Ì­”% Ì­”( Ì­!”, Ì­%”- Ì­&”5 Ì­.”8 Ì­1”9 Ì­2”: Ì­3”; Ì­4”< Ì­5”” Ì®” Ì®” Ì®”! Ì®”” Ì®” Ì®” Ì¯” Ì¯–” Ì®” Ì®” Ì¯8” Ì¯ÌA” Ì¯ÌB”$ Ì¯ÌKš” Ì®” Ì®” Ì¯ÌM” Ì¯ÌS” Ì¯ÌT” Ì¯ÌV” Ì¯ÌY” Ì¯Ì[”  Ì¯Ì\”" Ì¯Ì^’” Ì®” Ì®’” Ì§
+” Ì§’” Ì³
+” Ì³–” Ì³
+” Ì³” Ì¾” Ì¾”  Ì¾”! Ì¾ž” Ì´” Ì´” Ì´” Ì´”# Ì´”% Ì´”) Ì´"”* Ì´#”2 Ì´+”4 Ì´-”? Ì´8”ÌA Ì´:”ÌD Ì´=”ÌF Ì´?”” Ì´” Ì´” Ìµ” Ìµ˜” Ì´” Ì´” Ìµ:”  ÌµÌD”! ÌµÌE”+ ÌµÌO”, ÌµÌP”0 ÌµÌT˜” Ì´” Ì´” Ì¶” Ì¶”  Ì¶”) Ì¶"”* Ì¶#”0 Ì¶)˜” Ì´” Ì´” Ì¶+” Ì¶/” Ì¶0”$ Ì¶9”% Ì¶:”+ Ì¶Ì@–” Ì´” Ì´” Ì·”% Ì·”& Ì·”/ Ì·(–” Ì´” Ì´” Ì·*” Ì·/” Ì·0”" Ì·6–” Ì´” Ì´” Ì·8” Ì·>” Ì·?” Ì·ÌA–” Ì´” Ì´” Ì¸”" Ì¸”# Ì¸”$ Ì¸ž” Ì´” Ì´” Ì¸” Ì¸%” Ì¸&” Ì¸(”$ Ì¸-”& Ì¸/”' Ì¸0”) Ì¸2”. Ì¸7”0 Ì¸9”9 Ì¸ÌB”; Ì¸ÌDš” Ì´” Ì´” Ì¹” Ì¹” Ì¹” Ì¹”# Ì¹”% Ì¹”' Ì¹ ”) Ì¹"Ü ” Ì´” Ì´” Ìº” Ìº” Ìº”  Ìº”! Ìº”# Ìº”% Ìº”( Ìº!”, Ìº%”- Ìº&”5 Ìº.”8 Ìº1”9 Ìº2”: Ìº3”; Ìº4”< Ìº5”” Ì»” Ì»” Ì»”! Ì»”” Ì»” Ì»” Ì¼” Ì¼–” Ì»” Ì»” Ì¼8” Ì¼ÌA” Ì¼ÌB”$ Ì¼ÌKš” Ì»” Ì»” Ì¼ÌM” Ì¼ÌS” Ì¼ÌT” Ì¼ÌV” Ì¼ÌY” Ì¼Ì[”  Ì¼Ì\”" Ì¼Ì^’” Ì»” Ì»’” Ì³
+” Ì³’” Ì¦” Ì¦’” Ì ” Ì ’” Ì¡” Ì¡Ü ” ÌÆ” ÌÆ
+” ÌÆ” ÌÆ”' ÌÆ”+ ÌÆ”- ÌÆ ”1 ÌÆ$”2 ÌÆ%”: ÌÆ-”< ÌÆ/”ÌD ÌÆ7”ÌF ÌÇ”ÌG ÌÇ	”ÌH ÌÇ
+”ÌJ ÌÇ”ÌL ÌÇ”ÌO ÌÇ”ÌS ÌÇ”ÌT ÌÇ”Ì\ ÌÇ”Ì_ ÌÇ!”Ì` ÌÇ"”Ìa ÌÇ#”Ìb ÌÇ$”Ìc ÌÇ%”Ìd ÌÇ&’” ÌŸ” ÌŸ
+‘” ÌÊš” ÌÍ” ÌÍ” ÌÍ” ÌÍ” ÌÍ ” ÌÍ-”! ÌÍ/”% ÌÍ;”' ÌÍ=”/ ÌÍÌZ’” ÌÎ” ÌÎ
+–” ÌÎ” ÌÎ
+” Ìá” Ìá
+” Ìá” Ìá–” ÌÎ” ÌÎ
+” Ìá” Ìá” Ìá” Ìá–” ÌÎ” ÌÎ
+” Ìá”" Ìá.”# Ìá/”, Ìá8–” ÌÎ” ÌÎ
+” Ìâ” Ìâ”  Ìâ”" Ìâž” ÌÎ” ÌÎ
+” Ìâ” Ìâ” Ìâ” Ìâ”! Ìâ$”# Ìâ&”$ Ìâ'”& Ìâ)”+ Ìâ.”- Ìâ0”6 Ìâ9”8 Ìâ;š” ÌÎ” ÌÎ
+” Ìã” Ìã” Ìã” Ìã”" Ìã”$ Ìã”& Ìã”( Ìã”” ÌÏ” ÌÏ
+” ÌÏ” ÌÏ”” ÌÏ” ÌÏ
+” ÌÐ	” ÌÐ–” ÌÏ” ÌÏ
+” ÌÐ2” ÌÐ;” ÌÐ<”$ ÌÐÌE–” ÌÏ” ÌÏ
+” ÌÑ	” ÌÑ” ÌÑ” ÌÑ’” ÌÏ” ÌÏ
+’” ÌÓ” ÌÓ	–” ÌÓ” ÌÓ	” Ìß” Ìß” Ìß” Ìßš” ÌÓ” ÌÓ	” Ìß” Ìß” Ìß” Ìß” Ìß!” Ìß#” Ìß$”! Ìß&œ” ÌÔ” ÌÔ” ÌÔ” ÌÔ”# ÌÔ”% ÌÔ”* ÌÔ”, ÌÔ!”7 ÌÔ,”9 ÌÔ.”< ÌÔ1”> ÌÔ3”” ÌÔ” ÌÔ” ÌÕ” ÌÕ˜” ÌÔ” ÌÔ” ÌÕ5”  ÌÕ?”! ÌÕÌ@”+ ÌÕÌJ”, ÌÕÌK”0 ÌÕÌO˜” ÌÔ” ÌÔ” ÌÖ” ÌÖ”  ÌÖ”) ÌÖ”* ÌÖ”0 ÌÖ%˜” ÌÔ” ÌÔ” ÌÖ'” ÌÖ+” ÌÖ,”$ ÌÖ5”% ÌÖ6”+ ÌÖ<–” ÌÔ” ÌÔ” Ì×”% Ì×”& Ì×”/ Ì×$–” ÌÔ” ÌÔ” Ì×&”" Ì×2”# Ì×3”$ Ì×4–” ÌÔ” ÌÔ” Ì×6” Ì×<” Ì×=” Ì×?–” ÌÔ” ÌÔ” ÌØ”" ÌØ”# ÌØ”$ ÌØž” ÌÔ” ÌÔ” ÌØ” ÌØ!” ÌØ"” ÌØ$”$ ÌØ)”& ÌØ+”' ÌØ,”) ÌØ.”. ÌØ3”0 ÌØ5”9 ÌØ>”; ÌØÌ@–” ÌÔ” ÌÔ” ÌÙ” ÌÙ” ÌÙ”' ÌÙ”” ÌÛ” ÌÛ” ÌÛ” ÌÛ”” ÌÛ” ÌÛ” ÌÜ” ÌÜ–” ÌÛ” ÌÛ” ÌÜ4” ÌÜ=” ÌÜ>”$ ÌÜÌGš” ÌÛ” ÌÛ” ÌÝ” ÌÝ” ÌÝ” ÌÝ” ÌÝ”  ÌÝ”" ÌÝ”$ ÌÝ–” ÌÛ” ÌÛ” ÌÝ ” ÌÝ%” ÌÝ&” ÌÝ(’” ÌÛ” ÌÛ’” ÌÓ” ÌÓ	’” ÌÎ” ÌÎ
+‘” Ìä’” Ìæ”5 Ìæ3’” Ìé” Ìé’” Ìê” Ìê
+–” Ìê” Ìê
+” Í” Í
+” Í” Í–” Ìê” Ìê
+” Í” Í” Í” Í–” Ìê” Ìê
+” Í”" Í.”# Í/”, Í8–” Ìê” Ìê
+” Í	” Í	”  Í	”" Í	ž” Ìê” Ìê
+” Í	” Í	” Í	” Í	”! Í	$”# Í	&”$ Í	'”& Í	)”+ Í	.”- Í	0”6 Í	9”8 Í	;Ü ” Ìê” Ìê
+” Í
+” Í
+” Í
+” Í
+”  Í
+”" Í
+”$ Í
+”& Í
+”+ Í
+”- Í
+”/ Í
+!”1 Í
+#”4 Í
+&”6 Í
+(”8 Í
+*”: Í
+,”Ì@ Í
+2”ÌB Í
+4”ÌD Í
+6”ÌF Í
+8Ü ” Ìê” Ìê
+” Í” Í” Í” Í”" Í”$ Í”% Í”' Í”, Í”. Í ”9 Í+”; Í-”ÌB Í4”ÌD Í6”ÌE Í7”ÌG Í9’” Ìë” Ìë›” Ìì” Ìì
+” Ìì” Ìì” Ìì”% Ìì”& Ìì”- Ìì ”. Ìì!”/ Ìì"”0 Ìì#’” Ìë” Ìë–” Ìì” Ìì
+” Ìí	” Ìí” Ìí” Ìí’” Ìë” Ìë˜” Ìì” Ìì
+” Ìí” Ìí ” Ìí!”& Ìí+”' Ìí,”+ Ìí0’” Ìë” Ìë˜” Ìì” Ìì
+” Ìî	” Ìî” Ìî” Ìî”  Ìî”( Ìî ’” Ìë” Ìë’” Ìì” Ìì
+–” Ìð” Ìð
+” Ìð” Ìð” Ìð”( Ìð”” Ìð” Ìð
+” Ìñ	” Ìñ˜” Ìð” Ìð
+” Ìò	” Ìò” Ìò”& Ìò”' Ìò”+ Ìò#˜” Ìð” Ìð
+” Ìó	” Ìó” Ìó” Ìó”  Ìó”( Ìó š” Ìð” Ìð
+” Ìô	” Ìô” Ìô” Ìô”  Ìô”" Ìô”$ Ìô”& Ìô’” Ìð” Ìð
+’” Ìö” Ìö•” Ì÷” Ì÷
+” Ì÷” Ì÷”' Ì÷’” Ìù” Ìù–” Ìú” Ìú
+” Ìú” Ìú” Ìú”( Ìú’” Ìù” Ìù”” Ìú” Ìú
+” Ìû	” Ìû’” Ìù” Ìù–” Ìú” Ìú
+” Ìü	” Ìü” Ìü”$ Ìü’” Ìù” Ìùš” Ìú” Ìú
+” Ìý	” Ìý” Ìý” Ìý” Ìý” Ìý”! Ìý”# Ìý’” Ìù” Ìù˜” Ìú” Ìú
+” Ìþ	” Ìþ” Ìþ”$ Ìþ”% Ìþ”+ Ìþ#’” Ìù” Ìù’” Ìú” Ìú
+’” Í ” Í —” Í” Í
+” Í” Í” Í”) Í”+ Í’” Í ” Í ”” Í” Í
+” Í	” Í’” Í ” Í –” Í” Í
+” Í	” Í” Í”$ Í’” Í ” Í š” Í” Í
+” Í	” Í” Í” Í” Í” Í”! Í”# Í’” Í ” Í ˜” Í” Í
+” Í	” Í” Í”$ Í”% Í”+ Í#’” Í ” Í ž” Í” Í
+” Í	” Í” Í” Í” Í”! Í”" Í”$ Í”) Í!”+ Í#”, Í$”. Í&’” Í ” Í ’” Í” Í
+’” Ìê” Ìê
+‘” Í’” Í” Í’” Í” Í
+–” Í” Í
+” Í)” Í)
+” Í)” Í)’” Í” Í	–” Í” Í	” Í” Í” Í” Í–” Í” Í	” Í” Í” Í” Í–” Í” Í	” Í ” Í,” Í-” Í/’” Í” Í’” Í
+” Í›” Í
+” Í” Í”  Í”! Í”% Í”& Í”3 Í#”4 Í$”9 Í)”: Í*–” Í
+” Í” Í”! Í”" Í”$ Í˜” Í
+” Í” Í”* Í”+ Í”0 Í ”1 Í!”6 Í&›” Í” Í”  Í”% Í”& Í”) Í”* Í”1 Í"”2 Í#”3 Í$”4 Í%–” Í” Í” Í”! Í”" Í”$ Í–” Í” Í” Í”" Í%”# Í&”, Í/’” Í” Í’” Í
+” Í””/ Í”3 Í”4 Í”: Í’” Í” Í’” Í” Í	’” Í” Í’” Í” Í	’” Í” Í–” Í” Í	” Í&” Í&” Í&” Í&’” Í” Í” Í” Í	” Í'” Í'” Í'” Í'” Í'”  Í'”$ Í'”% Í'”7 Í'.”9 Í'0”; Í'2’” Í ” Í ’” Í ” Í ’” Í!” Í!Ü ” Í!” Í!” Í"” Í"” Í"” Í"” Í"” Í"”  Í"”! Í"”" Í"”$ Í"”% Í"”& Í"”( Í"”* Í"!”+ Í""”- Í"$”. Í"%”0 Í"'”2 Í")”3 Í"*”4 Í"+”5 Í",˜” Í!” Í!” Í#” Í#” Í#” Í#” Í#”& Í#–” Í!” Í!” Í$” Í$” Í$” Í$–” Í!” Í!” Í$” Í$” Í$” Í$’” Í” Í’” Í” Í	’” Í” Í
+‘” Í*’” Í,”5 Í,3’” Í.
+” Í.”” Í/” Í/” Í/” Í/”” Í0” Í0” Í0” Í0š” Í2” Í2” Í2” Í2” Í2”  Í2”* Í2&”+ Í2'”1 Í2-”3 Í2/œ” Í3” Í3” Í3”  Í3”! Í3”% Í3”& Í3 ”. Í3(”/ Í3)”2 Í3,”5 Í3/”6 Í30š” Í4” Í4” Í4”! Í4”" Í4”& Í4 ”' Í4!”/ Í4)”0 Í4*”1 Í4+‘”	 Í5‘” Í5” Í6” Í6
+” Í6” Í6” Í6”  Í6”$ Í6”% Í6”- Í6'”. Í6(”2 Í6,”3 Í6-”4 Í6.” Í7” Í7
+” Í7” Í7”! Í7”" Í7”& Í7 ”' Í7!”/ Í7)”0 Í7*”4 Í7.”5 Í7/”6 Í70” Í8” Í8” Í8” Í8” Í8” Í8” Í8”! Í8”% Í8”& Í8 ”) Í8#”/ Í8)”0 Í8*Ü ” Í9” Í9” Í9” Í9”" Í9”# Í9”' Í9!”( Í9"”0 Í9*”1 Í9+”5 Í9/”6 Í90”7 Í91”: Í94”ÌB Í9<”ÌC Í9=‘”	 Í:Ü ” Í<” Í<” Í<” Í<” Í<” Í<” Í<”# Í<”$ Í< ”, Í<(”- Í<)”1 Í<-”8 Í<4”< Í<8”= Í<9”ÌA Í<=”ÌI Í<ÌE”ÌM Í<ÌI”ÌN Í<ÌJ”ÌP Í<ÌL—” Í=” Í=
+” Í=” Í=” Í=”# Í=”$ Í=’” Í>” Í>‘”	 Í?œ” ÍA” ÍA” ÍA” ÍA” ÍA” ÍA” ÍA”% ÍA!”( ÍA$”/ ÍA+”0 ÍA,”1 ÍA-—” ÍB” ÍB” ÍB	” ÍB” ÍB” ÍB” ÍBÜ ” ÍD” ÍD	” ÍD” ÍD” ÍD” ÍD” ÍD” ÍD” ÍD”  ÍD”! ÍD”' ÍD#”( ÍD$”. ÍD*”0 ÍD,”1 ÍD-”3 ÍD/”5 ÍD1Ü ” ÍE” ÍE
+” ÍE” ÍE” ÍE” ÍE”" ÍE”# ÍE”$ ÍE”% ÍE”& ÍE ”) ÍE#”- ÍE'”0 ÍE*”3 ÍE-”7 ÍE1”8 ÍE2”> ÍE8”? ÍE9”Ì@ ÍE:”ÌA ÍE;”ÌB ÍE<”ÌE ÍE?”ÌG ÍEÌAž” ÍF” ÍF” ÍF”  ÍF”# ÍF”' ÍF”( ÍF ”. ÍF&”/ ÍF'”0 ÍF(”1 ÍF)”2 ÍF*”7 ÍF/”8 ÍF0ž” ÍG” ÍG” ÍG” ÍG”  ÍG”$ ÍG”% ÍG”+ ÍG#”, ÍG$”- ÍG%”. ÍG&”/ ÍG'”4 ÍG,”5 ÍG-’” ÍH” ÍH‘” ÍI‘”	 ÍJ’” ÍL”! ÍLœ” ÍM” ÍM” ÍM” ÍM” ÍM” ÍM” ÍM”& ÍM"”) ÍM%”0 ÍM,”1 ÍM-”2 ÍM.œ” ÍN” ÍN” ÍN” ÍN” ÍN” ÍN”  ÍN”' ÍN#”* ÍN&”1 ÍN-”2 ÍN.”3 ÍN/š” ÍP” ÍP” ÍP” ÍP” ÍP”  ÍP”* ÍP&”+ ÍP'”1 ÍP-”3 ÍP/Ü ” ÍQ” ÍQ
+” ÍQ” ÍQ” ÍQ”) ÍQ#”1 ÍQ+”2 ÍQ,”9 ÍQ3”: ÍQ4”; ÍQ5”< ÍQ6”ÌB ÍQ<”ÌK ÍQÌE”ÌL ÍQÌF”ÌS ÍQÌM”ÌT ÍQÌN”ÌU ÍQÌO”ÌV ÍQÌP”Ì[ ÍQÌU”Ì\ ÍQÌV‘”	 ÍR‘” ÍR˜” ÍS” ÍS
+” ÍS” ÍS”  ÍS”# ÍS”+ ÍS%”, ÍS&˜” ÍT” ÍT
+” ÍT” ÍT”" ÍT”% ÍT”- ÍT'”. ÍT(Ü ” ÍU” ÍU
+” ÍU” ÍU” ÍU”) ÍU#”. ÍU(”/ ÍU)”6 ÍU0”7 ÍU1”8 ÍU2”9 ÍU3”? ÍU9”ÌE ÍU?”ÌF ÍUÌ@”ÌM ÍUÌG”ÌN ÍUÌH”ÌO ÍUÌI”ÌP ÍUÌJ”ÌU ÍUÌO”ÌV ÍUÌP‘”	 ÍV—” ÍX” ÍX” ÍX	” ÍX” ÍX” ÍX” ÍX’” ÍY” ÍY’” Í[
+” Í[—” Í\” Í\” Í\” Í\” Í\” Í\”  Í\”” Í\” Í\%”, Í\>”- Í\?—” Í]” Í]” Í]” Í]” Í]” Í]”  Í]”” Í]” Í]%”- Í]?”. Í]Ì@—” Í^” Í^” Í^” Í^” Í^” Í^”  Í^”” Í^” Í^%”+ Í^=”, Í^>—” Í_” Í_” Í_” Í_” Í_” Í_”  Í_”” Í_” Í_%”/ Í_ÌA”0 Í_ÌB”” Í`” Í`”+ Í`'”, Í`(’” Ía” Ía”” Íc
+” Íc” Íc” Íc'˜” Íd” Íd” Íd” Íd” Íd” Íd” Íd”) Íd%Ü ” Íe” Íe” Íe	” Íe” Íe” Íe” Íe” Íe” Íe” Íe”# Íe”$ Íe ”' Íe#”( Íe$”+ Íe'”0 Íe,”3 Íe/”6 Íe2”7 Íe3”8 Íe4”? Íe;”Ì@ Íe<”ÌA Íe=”ÌB Íe>”ÌC Íe?–” Íf” Íf” Íf” Íf” Íf” Íf’” Íg” Íg’” Íi
+” Íi–” Íj” Íj” Íj” Íj” Íj” Íjž” Ík” Ík” Ík” Ík” Ík” Ík” Ík”  Ík”# Ík”( Ík$”+ Ík'”. Ík*”/ Ík+”0 Ík,•” Íl” Íl” Íl” Íl” Íl•” Íl” Íl” Íl” Íl” Íl•” Ím” Ím” Ím” Ím” Ím•” Ím” Ím” Ím” Ím” Ím›” Ín” Ín” Ín” Ín” Ín” Ín” Ín” Ín”  Ín”# Ín”$ Ín ’” Ío” ÍoÔrG–§version¤file§sources®sourcesContent¥names¨mappingsÀ‘À‘ÀÜÁ‘”    ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”  	 ‘”  
+ ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”    ‘”  ! ‘”  " ‘”  # ‘”  $ ‘”  % ‘”  & ‘”  ' ‘”  ( ‘”  ) ‘”  * ‘”  + ‘”  , ‘”  - ‘”  . ‘”  / ‘”  0 ‘”  1 ‘”  2 ‘”  3 ‘”  4 ‘”  5 ‘”  6 ‘”  7 ‘”  8 ‘”  9 ‘”  : ‘”  ; ‘”  < ‘”  = ‘”  > ‘”  ? ‘”  Ì@ ‘”  ÌA ‘”  ÌB ‘”  ÌC ‘”  ÌD ‘”  ÌE ‘”  ÌF ‘”  ÌG ‘”  ÌH ‘”  ÌI ‘”  ÌJ ‘”  ÌK ‘”  ÌL ‘”  ÌM ‘”  ÌN ‘”  ÌO ‘”  ÌP ‘”  ÌQ ‘”  ÌR ‘”  ÌS ‘”  ÌT ‘”  ÌU ‘”  ÌV ‘”  ÌW ‘”  ÌX ‘”  ÌY ‘”  ÌZ ‘”  Ì[ ‘”  Ì\ ‘”  Ì] ‘”  Ì^ ‘”  Ì_ ‘”  Ì` ‘”  Ìa ‘”  Ìb ‘”  Ìc ‘”  Ìd ‘”  Ìe ‘”  Ìf ‘”  Ìg ‘”  Ìh ‘”  Ìi ‘”  Ìj ‘”  Ìk ‘”  Ìl ‘”  Ìm ‘”  Ìn ‘”  Ìo ‘”  Ìp ‘”  Ìq ‘”  Ìr ‘”  Ìs ‘”  Ìt ‘”  Ìu ‘”  Ìv ‘”  Ìw ‘”  Ìx ‘”  Ìy ‘”  Ìz ‘”  Ì{ ‘”  Ì| ‘”  Ì} ‘”  Ì~ ‘”  Ì ‘”  Ì€ ‘”  Ì ‘”  Ì‚ ‘”  Ìƒ ‘”  Ì„ ‘”  Ì… ‘”  Ì† ‘”  Ì‡ ‘”  Ìˆ ‘”  Ì‰ ‘”  ÌŠ ‘”  Ì‹ ‘”  ÌŒ ‘”  Ì ‘”  ÌŽ ‘”  Ì ‘”  Ì ‘”  Ì‘ ‘”  Ì’ ‘”  Ì“ ‘”  Ì” ‘”  Ì• ‘”  Ì– ‘”  Ì— ‘”  Ì˜ ‘”  Ì™ ‘”  Ìš ‘”  Ì› ‘”  Ìœ ‘”  Ì ‘”  Ìž ‘”  ÌŸ ‘”  Ì  ‘”  Ì¡ ‘”  Ì¢ ‘”  Ì£ ‘”  Ì¤ ‘”  Ì¥ ‘”  Ì¦ ‘”  Ì§ ‘”  Ì¨ ‘”  Ì© ‘”  Ìª ‘”  Ì« ‘”  Ì¬ ‘”  Ì­ ‘”  Ì® ‘”  Ì¯ ‘”  Ì° ‘”  Ì± ‘”  Ì² ‘”  Ì³ ‘”  Ì´ ‘”  Ìµ ‘”  Ì¶ ‘”  Ì· ‘”  Ì¸ ‘”  Ì¹ ‘”  Ìº ‘”  Ì» ‘”  Ì¼ ‘”  Ì½ ‘”  Ì¾ ‘”  Ì¿ ‘”  ÌÀ ‘”  ÌÁ ‘”  ÌÂ ‘”  ÌÃ ‘”  ÌÄ ‘”  ÌÅ ‘”  ÌÆ ‘”  ÌÇ ‘”  ÌÈ ‘”  ÌÉ ‘”  ÌÊ ‘”  ÌË ‘”  ÌÌ ‘”  ÌÍ ‘”  ÌÎ ‘”  ÌÏ ‘”  ÌÐ ‘”  ÌÑ ‘”  ÌÒ ‘”  ÌÓ ‘”  ÌÔ ‘”  ÌÕ ‘”  ÌÖ ‘”  Ì× ‘”  ÌØ ‘”  ÌÙ ‘”  ÌÚ ‘”  ÌÛ ‘”  ÌÜ ‘”  ÌÝ ‘”  ÌÞ ‘”  Ìß ‘”  Ìà ‘”  Ìá ‘”  Ìâ ‘”  Ìã ‘”  Ìä ‘”  Ìå ‘”  Ìæ ‘”  Ìç ‘”  Ìè ‘”  Ìé ‘”  Ìê ‘”  Ìë ‘”  Ìì ‘”  Ìí ‘”  Ìî ‘”  Ìï ‘”  Ìð ‘”  Ìñ ‘”  Ìò ‘”  Ìó ‘”  Ìô ‘”  Ìõ ‘”  Ìö ‘”  Ì÷ ‘”  Ìø ‘”  Ìù ‘”  Ìú ‘”  Ìû ‘”  Ìü ‘”  Ìý ‘”  Ìþ ‘”  Ìÿ ‘”  Í  ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í	 ‘”  Í
+ ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í  ‘”  Í! ‘”  Í" ‘”  Í# ‘”  Í$ ‘”  Í% ‘”  Í& ‘”  Í' ‘”  Í( ‘”  Í) ‘”  Í* ‘”  Í+ ‘”  Í, ‘”  Í- ‘”  Í. ‘”  Í/ ‘”  Í0 ‘”  Í1 ‘”  Í2 ‘”  Í3 ‘”  Í4 ‘”  Í5 ‘”  Í6 ‘”  Í7 ‘”  Í8 ‘”  Í9 ‘”  Í: ‘”  Í; ‘”  Í< ‘”  Í= ‘”  Í> ‘”  Í? ‘”  Í@ ‘”  ÍA ‘”  ÍB ‘”  ÍC ‘”  ÍD ‘”  ÍE ‘”  ÍF ‘”  ÍG ‘”  ÍH ‘”  ÍI ‘”  ÍJ ‘”  ÍK ‘”  ÍL ‘”  ÍM ‘”  ÍN ‘”  ÍO ‘”  ÍP ‘”  ÍQ ‘”  ÍR ‘”  ÍS ‘”  ÍT ‘”  ÍU ‘”  ÍV ‘”  ÍW ‘”  ÍX ‘”  ÍY ‘”  ÍZ ‘”  Í[ ‘”  Í\ ‘”  Í] ‘”  Í^ ‘”  Í_ ‘”  Í` ‘”  Ía ‘”  Íb ‘”  Íc ‘”  Íd ‘”  Íe ‘”  Íf ‘”  Íg ‘”  Íh ‘”  Íi ‘”  Íj ‘”  Ík ‘”  Íl ‘”  Ím ‘”  Ín ‘”  Ío ‘”  Íp ‘”  Íq ‘”  Ír ‘”  Ís ‘”  Ít ‘”  Íu ‘”  Ív ‘”  Íw ‘”  Íx ‘”  Íy ‘”  Íz ‘”  Í{ ‘”  Í| ‘”  Í} ‘”  Í~ ‘”  Í ‘”  Í€ ‘”  Í ‘”  Í‚ ‘”  Íƒ ‘”  Í„ ‘”  Í… ‘”  Í† ‘”  Í‡ ‘”  Íˆ ‘”  Í‰ ‘”  ÍŠ ‘”  Í‹ ‘”  ÍŒ ‘”  Í ‘”  ÍŽ ‘”  Í ‘”  Í ‘”  Í‘ ‘”  Í’ ‘”  Í“ ‘”  Í” ‘”  Í• ‘”  Í– ‘”  Í— ‘”  Í˜ ‘”  Í™ ‘”  Íš ‘”  Í› ‘”  Íœ ‘”  Í ‘”  Íž ‘”  ÍŸ ‘”  Í  ‘”  Í¡ ‘”  Í¢ ‘”  Í£ ‘”  Í¤ ‘”  Í¥ ‘”  Í¦ ‘”  Í§ ‘”  Í¨ ‘”  Í© ‘”  Íª ‘”  Í« ‘”  Í¬ ‘”  Í­ ‘”  Í® ‘”  Í¯ ‘”  Í° ‘”  Í± ‘”  Í² ‘”  Í³ ‘”  Í´ ‘”  Íµ ‘”  Í¶ ‘”  Í· ‘”  Í¸ ‘”  Í¹ ‘”  Íº ‘”  Í» ‘”  Í¼ ‘”  Í½ ‘”  Í¾ ‘”  Í¿ ‘”  ÍÀ ‘”  ÍÁ ‘”  ÍÂ ‘”  ÍÃ ‘”  ÍÄ ‘”  ÍÅ ‘”  ÍÆ ‘”  ÍÇ ‘”  ÍÈ ‘”  ÍÉ ‘”  ÍÊ ‘”  ÍË ‘”  ÍÌ ‘”  ÍÍ ‘”  ÍÎ ‘”  ÍÏ ‘”  ÍÐ ‘”  ÍÑ ‘”  ÍÒ ‘”  ÍÓ ‘”  ÍÔ ‘”  ÍÕ ‘”  ÍÖ ‘”  Í× ‘”  ÍØ ‘”  ÍÙ ‘”  ÍÚ ‘”  ÍÛ ‘”  ÍÜ ‘”  ÍÝ ‘”  ÍÞ ‘”  Íß ‘”  Íà ‘”  Íá ‘”  Íâ ‘”  Íã ‘”  Íä ‘”  Íå ‘”  Íæ ‘”  Íç ‘”  Íè ‘”  Íé ‘”  Íê ‘”  Íë ‘”  Íì ‘”  Íí ‘”  Íî ‘”  Íï ‘”  Íð ‘”  Íñ ‘”  Íò ‘”  Íó ‘”  Íô ‘”  Íõ ‘”  Íö ‘”  Í÷ ‘”  Íø ‘”  Íù ‘”  Íú ‘”  Íû ‘”  Íü ‘”  Íý ‘”  Íþ ‘”  Íÿ ‘”  Í  ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í	 ‘”  Í
+ ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í  ‘”  Í! ‘”  Í" ‘”  Í# ‘”  Í$ ‘”  Í% ‘”  Í& ‘”  Í' ‘”  Í( ‘”  Í) ‘”  Í* ‘”  Í+ ‘”  Í, ‘”  Í- ‘”  Í. ‘”  Í/ ‘”  Í0 ‘”  Í1 ‘”  Í2 ‘”  Í3 ‘”  Í4 ‘”  Í5 ‘”  Í6 ‘”  Í7 ‘”  Í8 ‘”  Í9 ‘”  Í: ‘”  Í; ‘”  Í< ‘”  Í= ‘”  Í> ‘”  Í? ‘”  Í@ ‘”  ÍA ‘”  ÍB ‘”  ÍC ‘”  ÍD ‘”  ÍE ‘”  ÍF ‘”  ÍG ‘”  ÍH ‘”  ÍI ‘”  ÍJ ‘”  ÍK ‘”  ÍL ‘”  ÍM ‘”  ÍN ‘”  ÍO ‘”  ÍP ‘”  ÍQ ‘”  ÍR ‘”  ÍS ‘”  ÍT ‘”  ÍU ‘”  ÍV ‘”  ÍW ‘”  ÍX ‘”  ÍY ‘”  ÍZ ‘”  Í[ ‘”  Í\ ‘”  Í] ‘”  Í^ ‘”  Í_ ‘”  Í` ‘”  Ía ‘”  Íb ‘”  Íc ‘”  Íd ‘”  Íe ‘”  Íf ‘”  Íg ‘”  Íh ‘”  Íi ‘”  Íj ‘”  Ík ‘”  Íl ‘”  Ím ‘”  Ín ‘”  Ío ‘”  Íp ‘”  Íq ‘”  Ír ‘”  Ís ‘”  Ít ‘”  Íu ‘”  Ív ‘”  Íw ‘”  Íx ‘”  Íy ‘”  Íz ‘”  Í{ ‘”  Í| ‘”  Í} ‘”  Í~ ‘”  Í ‘”  Í€ ‘”  Í ‘”  Í‚ ‘”  Íƒ ‘”  Í„ ‘”  Í… ‘”  Í† ‘”  Í‡ ‘”  Íˆ ‘”  Í‰ ‘”  ÍŠ ‘”  Í‹ ‘”  ÍŒ ‘”  Í ‘”  ÍŽ ‘”  Í ‘”  Í ‘”  Í‘ ‘”  Í’ ‘”  Í“ ‘”  Í” ‘”  Í• ‘”  Í– ‘”  Í— ‘”  Í˜ ‘”  Í™ ‘”  Íš ‘”  Í› ‘”  Íœ ‘”  Í ‘”  Íž ‘”  ÍŸ ‘”  Í  ‘”  Í¡ ‘”  Í¢ ‘”  Í£ ‘”  Í¤ ‘”  Í¥ ‘”  Í¦ ‘”  Í§ ‘”  Í¨ ‘”  Í© ‘”  Íª ‘”  Í« ‘”  Í¬ ‘”  Í­ ‘”  Í® ‘”  Í¯ ‘”  Í° ‘”  Í± ‘”  Í² ‘”  Í³ ‘”  Í´ ‘”  Íµ ‘”  Í¶ ‘”  Í· ‘”  Í¸ ‘”  Í¹ ‘”  Íº ‘”  Í» ‘”  Í¼ ‘”  Í½ ‘”  Í¾ ‘”  Í¿ ‘”  ÍÀ ÔrH’§missing¦pluginÃ¦genAbcÂÔ  ÔrI”²dynamicImportCache¹exportAllDeclarationCache»exportNamedDeclarationCache«importCache‘ÔrJ•¤type¥start£endªspecifiers¦source±ImportDeclarationÌÈÌê‘ÔrK”¤type¥start£end¥local¶ImportDefaultSpecifierÌÏÌÕÔrL”¤type¥start£end¤nameªIdentifierÌÏÌÕ¦routerÔrM•¤type¥start£end¥value£raw§LiteralÌÛÌé¬@ohos.router®'@ohos.router'

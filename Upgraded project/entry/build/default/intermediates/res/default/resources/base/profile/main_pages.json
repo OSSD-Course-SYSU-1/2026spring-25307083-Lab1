@@ -1,0 +1,14 @@
+{
+  "src": [
+    "pages/HomePage",
+    "pages/HistoryPage",
+    "pages/TodoPage",
+    "pages/FeatureMenuPage",
+    "pages/UnitConversionPage",
+    "pages/CurrencyConversionPage",
+    "pages/DateCalcPage",
+    "pages/BMIPage",
+    "pages/TipPage",
+    "pages/MortgagePage"
+  ]
+}

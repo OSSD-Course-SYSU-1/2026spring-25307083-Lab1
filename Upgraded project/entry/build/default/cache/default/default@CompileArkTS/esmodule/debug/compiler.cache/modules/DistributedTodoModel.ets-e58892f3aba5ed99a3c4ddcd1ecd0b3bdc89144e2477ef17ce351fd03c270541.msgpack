@@ -1,0 +1,842 @@
+Ôr@Ÿªassertions¤code´customTransformCache¬dependencies¢id¤meta±moduleSideEffects¬originalCode±originalSourcemap«resolvedIds®sourcemapChainµsyntheticNamedExportsµtransformDependencies®transformFiles¨cacheAstÔrAÚ,import distributedDataObject from "@ohos.data.distributedDataObject";
+import Logger from '../common/util/Logger';
+import { TodoItem, TodoDataSource } from './TodoItem';
+const TAG = 'DistributedTodoModel';
+/**
+ * åˆ†å¸ƒå¼å¾…åŠäº‹é¡¹æ•°æ®æ¨¡å‹å°è£…ã€‚
+ * è´Ÿè´£åˆ†å¸ƒå¼æ•°æ®å¯¹è±¡çš„åˆ›å»ºã€ç»„ç½‘ã€åŒæ­¥ç›‘å¬ã€è®¾å¤‡ä¸Šä¸‹çº¿å¤„ç†å’Œæ•°æ®å†²çªè§£å†³ã€‚
+ */
+export class DistributedTodoModel {
+    constructor() {
+        this.dataObject = null;
+        this.todoItems = [];
+        this.changeListeners = [];
+        this.statusListeners = [];
+        this.onlineDevices = [];
+    }
+    /**
+     * åˆå§‹åŒ–åˆ†å¸ƒå¼æ•°æ®å¯¹è±¡å¹¶åŠ å…¥ç»„ç½‘ã€‚
+     */
+    async init(context, sessionId) {
+        if (this.dataObject) {
+            Logger.info(TAG, 'DistributedTodoModel already initialized');
+            return this.dataObject['sessionId'];
+        }
+        const source = new TodoDataSource();
+        if (sessionId) {
+            source.sessionId = sessionId;
+        }
+        this.dataObject = distributedDataObject.create(context, source);
+        // æ³¨å†Œæ•°æ®å˜æ›´ç›‘å¬
+        this.dataObject.on('change', (changedSessionId, fields) => {
+            Logger.info(TAG, `Data changed, sessionId: ${changedSessionId}, fields: ${JSON.stringify(fields)}`);
+            this.handleDataChange();
+        });
+        // æ³¨å†Œè®¾å¤‡çŠ¶æ€ç›‘å¬
+        this.dataObject.on('status', (statusSessionId, networkId, status) => {
+            Logger.info(TAG, `Status changed: sessionId=${statusSessionId}, networkId=${networkId}, status=${status}`);
+            this.handleStatusChange(networkId, status);
+        });
+        const finalSessionId = sessionId || distributedDataObject.genSessionId();
+        await this.dataObject.setSessionId(finalSessionId);
+        Logger.info(TAG, `Joined session: ${finalSessionId}`);
+        if (!sessionId) {
+            this.todoItems = [];
+            this.writeItemsToDataObject();
+        }
+        else {
+            this.loadFromDataObject();
+        }
+        return finalSessionId;
+    }
+    /**
+     * æŒä¹…åŒ–å½“å‰æ•°æ®åˆ°æœ¬åœ°è®¾å¤‡ã€‚
+     */
+    async saveLocal() {
+        if (!this.dataObject) {
+            Logger.warn(TAG, 'DataObject not initialized, cannot save');
+            return;
+        }
+        try {
+            const result = await this.dataObject.save('local');
+            Logger.info(TAG, `Saved locally: sessionId=${result.sessionId}, version=${result.version}`);
+        }
+        catch (err) {
+            const error = err;
+            Logger.error(TAG, `Failed to save local: ${error.code} ${error.message}`);
+        }
+    }
+    /**
+     * é€€å‡ºåˆ†å¸ƒå¼ç»„ç½‘ã€‚
+     */
+    async leaveSession() {
+        if (!this.dataObject) {
+            return;
+        }
+        try {
+            await this.dataObject.setSessionId('');
+            Logger.info(TAG, 'Left all sessions');
+        }
+        catch (err) {
+            const error = err;
+            Logger.error(TAG, `Failed to leave session: ${error.code} ${error.message}`);
+        }
+    }
+    /**
+     * é”€æ¯åˆ†å¸ƒå¼æ•°æ®å¯¹è±¡ã€‚
+     */
+    destroy() {
+        if (this.dataObject) {
+            this.dataObject.off('change');
+            this.dataObject.off('status');
+            this.dataObject = null;
+        }
+        this.changeListeners = [];
+        this.statusListeners = [];
+        this.todoItems = [];
+        Logger.info(TAG, 'DistributedTodoModel destroyed');
+    }
+    // ==================== CRUD ====================
+    getItems() {
+        const result = [];
+        for (let i = 0; i < this.todoItems.length; i++) {
+            result.push(this.todoItems[i]);
+        }
+        return result;
+    }
+    getPendingCount() {
+        let count = 0;
+        for (let i = 0; i < this.todoItems.length; i++) {
+            if (!this.todoItems[i].completed) {
+                count++;
+            }
+        }
+        return count;
+    }
+    addItem(title) {
+        const trimmed = title.trim();
+        if (trimmed.length === 0) {
+            return;
+        }
+        const newItem = new TodoItem(trimmed);
+        const newList = [newItem];
+        for (let i = 0; i < this.todoItems.length; i++) {
+            newList.push(this.todoItems[i]);
+        }
+        this.todoItems = newList;
+        this.writeItemsToDataObject();
+        Logger.info(TAG, `Added item: ${newItem.id}`);
+    }
+    toggleItem(id) {
+        const index = this.findIndex(id);
+        if (index === -1) {
+            return;
+        }
+        this.todoItems[index].completed = !this.todoItems[index].completed;
+        this.todoItems[index].updateTime = Date.now();
+        const toggled = this.todoItems[index];
+        const remaining = [];
+        for (let i = 0; i < this.todoItems.length; i++) {
+            if (i !== index) {
+                remaining.push(this.todoItems[i]);
+            }
+        }
+        if (toggled.completed) {
+            remaining.push(toggled);
+        }
+        else {
+            const firstCompletedIdx = this.findFirstCompleted(remaining);
+            if (firstCompletedIdx === -1) {
+                remaining.push(toggled);
+            }
+            else {
+                const newList = [];
+                for (let i = 0; i < firstCompletedIdx; i++) {
+                    newList.push(remaining[i]);
+                }
+                newList.push(toggled);
+                for (let i = firstCompletedIdx; i < remaining.length; i++) {
+                    newList.push(remaining[i]);
+                }
+                this.todoItems = newList;
+                this.writeItemsToDataObject();
+                return;
+            }
+        }
+        this.todoItems = remaining;
+        this.writeItemsToDataObject();
+    }
+    updateItemTitle(id, newTitle) {
+        const trimmed = newTitle.trim();
+        if (trimmed.length === 0) {
+            return;
+        }
+        for (let i = 0; i < this.todoItems.length; i++) {
+            if (this.todoItems[i].id === id) {
+                this.todoItems[i].title = trimmed;
+                this.todoItems[i].updateTime = Date.now();
+                this.writeItemsToDataObject();
+                return;
+            }
+        }
+    }
+    deleteItem(id) {
+        const newList = [];
+        for (let i = 0; i < this.todoItems.length; i++) {
+            if (this.todoItems[i].id !== id) {
+                newList.push(this.todoItems[i]);
+            }
+        }
+        this.todoItems = newList;
+        this.writeItemsToDataObject();
+    }
+    clearCompleted() {
+        const newList = [];
+        for (let i = 0; i < this.todoItems.length; i++) {
+            if (!this.todoItems[i].completed) {
+                newList.push(this.todoItems[i]);
+            }
+        }
+        this.todoItems = newList;
+        this.writeItemsToDataObject();
+    }
+    // ==================== ç›‘å¬å™¨ ====================
+    onDataChange(listener) {
+        this.changeListeners.push(listener);
+    }
+    offDataChange(listener) {
+        const filtered = [];
+        for (let i = 0; i < this.changeListeners.length; i++) {
+            if (this.changeListeners[i] !== listener) {
+                filtered.push(this.changeListeners[i]);
+            }
+        }
+        this.changeListeners = filtered;
+    }
+    onStatusChange(listener) {
+        this.statusListeners.push(listener);
+    }
+    offStatusChange(listener) {
+        const filtered = [];
+        for (let i = 0; i < this.statusListeners.length; i++) {
+            if (this.statusListeners[i] !== listener) {
+                filtered.push(this.statusListeners[i]);
+            }
+        }
+        this.statusListeners = filtered;
+    }
+    getOnlineDevices() {
+        const result = [];
+        for (let i = 0; i < this.onlineDevices.length; i++) {
+            result.push({ networkId: this.onlineDevices[i].networkId, status: this.onlineDevices[i].status });
+        }
+        return result;
+    }
+    getSessionId() {
+        if (!this.dataObject) {
+            return '';
+        }
+        const sid = this.dataObject['sessionId'];
+        return sid !== undefined ? sid : '';
+    }
+    // ==================== å†…éƒ¨æ–¹æ³• ====================
+    writeItemsToDataObject() {
+        if (!this.dataObject) {
+            return;
+        }
+        this.dataObject['itemsJson'] = JSON.stringify(this.todoItems);
+        const currentVersion = this.dataObject['version'];
+        this.dataObject['version'] = (currentVersion !== undefined ? currentVersion : 0) + 1;
+        this.notifyListeners();
+    }
+    loadFromDataObject() {
+        if (!this.dataObject) {
+            return;
+        }
+        const itemsJson = this.dataObject['itemsJson'];
+        if (itemsJson !== undefined && itemsJson.length > 0) {
+            try {
+                const parsed = JSON.parse(itemsJson);
+                this.todoItems = parsed;
+                this.notifyListeners();
+            }
+            catch (e) {
+                Logger.error(TAG, `Failed to parse itemsJson: ${e}`);
+            }
+        }
+    }
+    handleDataChange() {
+        this.loadFromDataObject();
+    }
+    handleStatusChange(networkId, status) {
+        if (status === 'online') {
+            let found = false;
+            for (let i = 0; i < this.onlineDevices.length; i++) {
+                if (this.onlineDevices[i].networkId === networkId) {
+                    this.onlineDevices[i].status = status;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                this.onlineDevices.push({ networkId: networkId, status: status });
+            }
+        }
+        else if (status === 'offline') {
+            const filtered = [];
+            for (let i = 0; i < this.onlineDevices.length; i++) {
+                if (this.onlineDevices[i].networkId !== networkId) {
+                    filtered.push(this.onlineDevices[i]);
+                }
+            }
+            this.onlineDevices = filtered;
+        }
+        else if (status === 'restored') {
+            Logger.info(TAG, 'Data restored from persistence');
+            this.loadFromDataObject();
+        }
+        for (let i = 0; i < this.statusListeners.length; i++) {
+            this.statusListeners[i](networkId, status);
+        }
+    }
+    notifyListeners() {
+        const items = [];
+        for (let i = 0; i < this.todoItems.length; i++) {
+            items.push(this.todoItems[i]);
+        }
+        for (let i = 0; i < this.changeListeners.length; i++) {
+            this.changeListeners[i](items);
+        }
+    }
+    findIndex(id) {
+        for (let i = 0; i < this.todoItems.length; i++) {
+            if (this.todoItems[i].id === id) {
+                return i;
+            }
+        }
+        return -1;
+    }
+    findFirstCompleted(list) {
+        for (let i = 0; i < list.length; i++) {
+            if (list[i].completed) {
+                return i;
+            }
+        }
+        return -1;
+    }
+}
+//# sourceMappingURL=DistributedTodoModel.js.mapÂ“Ùe hvigor_ignore_E:_DevEco Studio_sdk_default_openharmony_ets_api_@ohos.data.distributedDataObject.d.tsÙMD:\software\SimpleCalculator-master\entry\src\main\ets\common\util\Logger.etsÙID:\software\SimpleCalculator-master\entry\src\main\ets\model\TodoItem.etsÙUD:\software\SimpleCalculator-master\entry\src\main\ets\model\DistributedTodoModel.etsÔrBœªmoduleName±isLocalDependency¯isNodeEntryFile§pkgPath±belongProjectPath§pkgNameªpkgVersion±dependencyPkgInfo¯hostModulesInfo°belongModulePath§checker¬shouldEmitJs¥entryÃÂÙ)D:\software\SimpleCalculator-master\entryÙ#D:\software\SimpleCalculator-master¥entry¥1.0.0Ô  ‘ÔrC’²hostDependencyName®hostModuleName½../model/DistributedTodoModel¥entryÙ)D:\software\SimpleCalculator-master\entryÔrDÜ ®¬getNodeCount²getIdentifierCount®getSymbolCount¬getTypeCountµgetInstantiationCountµgetRelationCacheSizes±isUndefinedSymbol±isArgumentsSymbol¯isUnknownSymbol¯getMergedSymbol®getDiagnostics´getGlobalDiagnostics´getRecursionIdentity¶getUnmatchedProperties¹getTypeOfSymbolAtLocation¯getTypeOfSymbolÙ(getSymbolsOfParameterPropertyDeclaration·getDeclaredTypeOfSymbol³getPropertiesOfType±getPropertyOfTypeÙ"getPrivateIdentifierPropertyOfType·getTypeOfPropertyOfType²getIndexInfoOfType³getIndexInfosOfTypeºgetIndexInfosOfIndexSymbol³getSignaturesOfType²getIndexTypeOfType¬getIndexType¬getBaseTypes¸getBaseTypeOfLiteralType®getWidenedType³getTypeFromTypeNode°getParameterTypeÙ$getParameterIdentifierNameAtPosition¸getPromisedTypeOfPromise®getAwaitedType¸getReturnTypeOfSignature®isNullableType¯getNullableType²getNonNullableType²getNonOptionalType°getTypeArguments®typeToTypeNodeÙ$indexInfoToIndexSignatureDeclaration¿signatureToSignatureDeclaration²symbolToEntityName²symbolToExpression¬symbolToNodeÙ!symbolToTypeParameterDeclarations¼symbolToParameterDeclarationºtypeParameterToDeclaration±getSymbolsInScope³getSymbolAtLocation·getIndexInfosAtLocationÙ!getShorthandAssignmentValueSymbolÙ#getExportSpecifierLocalTargetSymbol·getExportSymbolOfSymbol±getTypeAtLocationºgetTypeAtLocationForLinterÙ tryGetTypeAtLocationWithoutCheckºgetTypeOfAssignmentPatternÙ*getPropertySymbolOfDestructuringAssignment±signatureToString¬typeToString®symbolToStringµtypePredicateToString®writeSignature©writeType«writeSymbol²writeTypePredicate¼getAugmentedPropertiesOfType®getRootSymbols²getSymbolOfExpando±getContextualTypeÙ(getContextualTypeForObjectLiteralElementÙ#getContextualTypeForArgumentAtIndexÙ getContextualTypeForJsxAttribute²isContextSensitiveÙ!getTypeOfPropertyOfContextualTypeµgetFullyQualifiedNameÙ#tryGetResolvedSignatureWithoutCheck´getResolvedSignatureÙ/getResolvedSignatureForStringLiteralCompletionsÙ$getResolvedSignatureForSignatureHelpµgetExpandedParameters¹hasEffectiveRestParameterºcontainsArgumentsReference°getConstantValueµisValidPropertyAccessÙ#isValidPropertyAccessForCompletions»getSignatureFromDeclarationºisImplementationOfOverload¹getImmediateAliasedSymbol°getAliasedSymbol¯getEmitResolver²getExportsOfModule¿getExportsAndPropertiesOfModuleÙ forEachExportAndPropertyOfModule¯getSymbolWalker±getAmbientModules¹getJsxIntrinsicTagNamesAt³isOptionalParameter»tryGetMemberInModuleExportsÙ(tryGetMemberInModuleExportsAndProperties´tryFindAmbientModuleÙ(tryFindAmbientModuleWithoutAugmentations¯getApparentType¬getUnionType²isTypeAssignableTo³createAnonymousType¯createSignature¬createSymbol¯createIndexInfoªgetAnyType­getStringType­getNumberType±createPromiseType¯createArrayType¹getElementTypeOfArrayType®getBooleanType¬getFalseType«getTrueType«getVoidType°getUndefinedType«getNullType¯getESSymbolType¬getNeverType¯getOptionalType®getPromiseType²getPromiseLikeType´getAsyncIterableType²isSymbolAccessible«isArrayType«isTupleType¯isArrayLikeTypeÙ#isTypeInvalidDueToUnionDiscriminantºgetExactOptionalProperties¿getAllPossiblePropertiesOfTypesÙ(getSuggestedSymbolForNonexistentPropertyÙ#getSuggestionForNonexistentPropertyÙ,getSuggestedSymbolForNonexistentJSXAttributeÙ&getSuggestedSymbolForNonexistentSymbolÙ!getSuggestionForNonexistentSymbolÙ&getSuggestedSymbolForNonexistentModuleÙ!getSuggestionForNonexistentExportÙ+getSuggestedSymbolForNonexistentClassMember·getBaseConstraintOfType»getDefaultFromTypeParameter«resolveName¯getJsxNamespaceµgetJsxFragmentFactory¸getAccessibleSymbolChain»getTypePredicateOfSignature¹resolveExternalModuleName»resolveExternalModuleSymbol°tryGetThisTypeAt¹getTypeArgumentConstraint¸getSuggestionDiagnostics¸runWithCancellationTokenÙ3getLocalTypeParametersOfClassOrInterfaceOrTypeAlias´isDeclarationVisible´isPropertyAccessible»getTypeOnlyAliasDeclaration¿getMemberOverrideModifierStatusÙ!isTypeParameterPossiblyReferenced²getConstEnumRelate´clearConstEnumRelateµdeleteConstEnumRelateÙ$getTypeArgumentsForResolvedSignatureµgetCheckedSourceFilesÙ"collectHaveTsNoCheckFilesForLinter·clearQualifiedNameCache®isStaticRecord²isStaticSourceFileÔ  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  Ô  ÃÃÚ*<import { distributedDataObject } from '@kit.ArkData';
+import { common } from '@kit.AbilityKit';
+import { BusinessError } from '@kit.BasicServicesKit';
+import Logger from '../common/util/Logger';
+import { TodoItem, TodoDataSource } from './TodoItem';
+
+const TAG = 'DistributedTodoModel';
+
+interface DeviceInfo {
+  networkId: string;
+  status: string;
+}
+
+/**
+ * åˆ†å¸ƒå¼å¾…åŠäº‹é¡¹æ•°æ®æ¨¡å‹å°è£…ã€‚
+ * è´Ÿè´£åˆ†å¸ƒå¼æ•°æ®å¯¹è±¡çš„åˆ›å»ºã€ç»„ç½‘ã€åŒæ­¥ç›‘å¬ã€è®¾å¤‡ä¸Šä¸‹çº¿å¤„ç†å’Œæ•°æ®å†²çªè§£å†³ã€‚
+ */
+export class DistributedTodoModel {
+  private dataObject: distributedDataObject.DataObject | null = null;
+  private todoItems: Array<TodoItem> = [];
+  private changeListeners: Array<(items: Array<TodoItem>) => void> = [];
+  private statusListeners: Array<(networkId: string, status: string) => void> = [];
+  private onlineDevices: Array<DeviceInfo> = [];
+
+  /**
+   * åˆå§‹åŒ–åˆ†å¸ƒå¼æ•°æ®å¯¹è±¡å¹¶åŠ å…¥ç»„ç½‘ã€‚
+   */
+  async init(context: common.Context, sessionId?: string): Promise<string> {
+    if (this.dataObject) {
+      Logger.info(TAG, 'DistributedTodoModel already initialized');
+      return this.dataObject['sessionId'] as string;
+    }
+
+    const source = new TodoDataSource();
+    if (sessionId) {
+      source.sessionId = sessionId;
+    }
+
+    this.dataObject = distributedDataObject.create(context, source);
+
+    // æ³¨å†Œæ•°æ®å˜æ›´ç›‘å¬
+    this.dataObject.on('change', (changedSessionId: string, fields: Array<string>) => {
+      Logger.info(TAG, `Data changed, sessionId: ${changedSessionId}, fields: ${JSON.stringify(fields)}`);
+      this.handleDataChange();
+    });
+
+    // æ³¨å†Œè®¾å¤‡çŠ¶æ€ç›‘å¬
+    this.dataObject.on('status', (statusSessionId: string, networkId: string, status: string) => {
+      Logger.info(TAG, `Status changed: sessionId=${statusSessionId}, networkId=${networkId}, status=${status}`);
+      this.handleStatusChange(networkId, status);
+    });
+
+    const finalSessionId = sessionId || distributedDataObject.genSessionId();
+    await this.dataObject.setSessionId(finalSessionId);
+    Logger.info(TAG, `Joined session: ${finalSessionId}`);
+
+    if (!sessionId) {
+      this.todoItems = [];
+      this.writeItemsToDataObject();
+    } else {
+      this.loadFromDataObject();
+    }
+
+    return finalSessionId;
+  }
+
+  /**
+   * æŒä¹…åŒ–å½“å‰æ•°æ®åˆ°æœ¬åœ°è®¾å¤‡ã€‚
+   */
+  async saveLocal(): Promise<void> {
+    if (!this.dataObject) {
+      Logger.warn(TAG, 'DataObject not initialized, cannot save');
+      return;
+    }
+    try {
+      const result: distributedDataObject.SaveSuccessResponse = await this.dataObject.save('local');
+      Logger.info(TAG, `Saved locally: sessionId=${result.sessionId}, version=${result.version}`);
+    } catch (err) {
+      const error = err as BusinessError;
+      Logger.error(TAG, `Failed to save local: ${error.code} ${error.message}`);
+    }
+  }
+
+  /**
+   * é€€å‡ºåˆ†å¸ƒå¼ç»„ç½‘ã€‚
+   */
+  async leaveSession(): Promise<void> {
+    if (!this.dataObject) {
+      return;
+    }
+    try {
+      await this.dataObject.setSessionId('');
+      Logger.info(TAG, 'Left all sessions');
+    } catch (err) {
+      const error = err as BusinessError;
+      Logger.error(TAG, `Failed to leave session: ${error.code} ${error.message}`);
+    }
+  }
+
+  /**
+   * é”€æ¯åˆ†å¸ƒå¼æ•°æ®å¯¹è±¡ã€‚
+   */
+  destroy(): void {
+    if (this.dataObject) {
+      this.dataObject.off('change');
+      this.dataObject.off('status');
+      this.dataObject = null;
+    }
+    this.changeListeners = [];
+    this.statusListeners = [];
+    this.todoItems = [];
+    Logger.info(TAG, 'DistributedTodoModel destroyed');
+  }
+
+  // ==================== CRUD ====================
+
+  getItems(): Array<TodoItem> {
+    const result: Array<TodoItem> = [];
+    for (let i = 0; i < this.todoItems.length; i++) {
+      result.push(this.todoItems[i]);
+    }
+    return result;
+  }
+
+  getPendingCount(): number {
+    let count = 0;
+    for (let i = 0; i < this.todoItems.length; i++) {
+      if (!this.todoItems[i].completed) {
+        count++;
+      }
+    }
+    return count;
+  }
+
+  addItem(title: string): void {
+    const trimmed = title.trim();
+    if (trimmed.length === 0) {
+      return;
+    }
+    const newItem = new TodoItem(trimmed);
+    const newList: Array<TodoItem> = [newItem];
+    for (let i = 0; i < this.todoItems.length; i++) {
+      newList.push(this.todoItems[i]);
+    }
+    this.todoItems = newList;
+    this.writeItemsToDataObject();
+    Logger.info(TAG, `Added item: ${newItem.id}`);
+  }
+
+  toggleItem(id: string): void {
+    const index = this.findIndex(id);
+    if (index === -1) {
+      return;
+    }
+    this.todoItems[index].completed = !this.todoItems[index].completed;
+    this.todoItems[index].updateTime = Date.now();
+
+    const toggled = this.todoItems[index];
+    const remaining: Array<TodoItem> = [];
+    for (let i = 0; i < this.todoItems.length; i++) {
+      if (i !== index) {
+        remaining.push(this.todoItems[i]);
+      }
+    }
+
+    if (toggled.completed) {
+      remaining.push(toggled);
+    } else {
+      const firstCompletedIdx = this.findFirstCompleted(remaining);
+      if (firstCompletedIdx === -1) {
+        remaining.push(toggled);
+      } else {
+        const newList: Array<TodoItem> = [];
+        for (let i = 0; i < firstCompletedIdx; i++) {
+          newList.push(remaining[i]);
+        }
+        newList.push(toggled);
+        for (let i = firstCompletedIdx; i < remaining.length; i++) {
+          newList.push(remaining[i]);
+        }
+        this.todoItems = newList;
+        this.writeItemsToDataObject();
+        return;
+      }
+    }
+    this.todoItems = remaining;
+    this.writeItemsToDataObject();
+  }
+
+  updateItemTitle(id: string, newTitle: string): void {
+    const trimmed = newTitle.trim();
+    if (trimmed.length === 0) {
+      return;
+    }
+    for (let i = 0; i < this.todoItems.length; i++) {
+      if (this.todoItems[i].id === id) {
+        this.todoItems[i].title = trimmed;
+        this.todoItems[i].updateTime = Date.now();
+        this.writeItemsToDataObject();
+        return;
+      }
+    }
+  }
+
+  deleteItem(id: string): void {
+    const newList: Array<TodoItem> = [];
+    for (let i = 0; i < this.todoItems.length; i++) {
+      if (this.todoItems[i].id !== id) {
+        newList.push(this.todoItems[i]);
+      }
+    }
+    this.todoItems = newList;
+    this.writeItemsToDataObject();
+  }
+
+  clearCompleted(): void {
+    const newList: Array<TodoItem> = [];
+    for (let i = 0; i < this.todoItems.length; i++) {
+      if (!this.todoItems[i].completed) {
+        newList.push(this.todoItems[i]);
+      }
+    }
+    this.todoItems = newList;
+    this.writeItemsToDataObject();
+  }
+
+  // ==================== ç›‘å¬å™¨ ====================
+
+  onDataChange(listener: (items: Array<TodoItem>) => void): void {
+    this.changeListeners.push(listener);
+  }
+
+  offDataChange(listener: (items: Array<TodoItem>) => void): void {
+    const filtered: Array<(items: Array<TodoItem>) => void> = [];
+    for (let i = 0; i < this.changeListeners.length; i++) {
+      if (this.changeListeners[i] !== listener) {
+        filtered.push(this.changeListeners[i]);
+      }
+    }
+    this.changeListeners = filtered;
+  }
+
+  onStatusChange(listener: (networkId: string, status: string) => void): void {
+    this.statusListeners.push(listener);
+  }
+
+  offStatusChange(listener: (networkId: string, status: string) => void): void {
+    const filtered: Array<(networkId: string, status: string) => void> = [];
+    for (let i = 0; i < this.statusListeners.length; i++) {
+      if (this.statusListeners[i] !== listener) {
+        filtered.push(this.statusListeners[i]);
+      }
+    }
+    this.statusListeners = filtered;
+  }
+
+  getOnlineDevices(): Array<DeviceInfo> {
+    const result: Array<DeviceInfo> = [];
+    for (let i = 0; i < this.onlineDevices.length; i++) {
+      result.push({ networkId: this.onlineDevices[i].networkId, status: this.onlineDevices[i].status });
+    }
+    return result;
+  }
+
+  getSessionId(): string {
+    if (!this.dataObject) {
+      return '';
+    }
+    const sid: string | undefined = this.dataObject['sessionId'] as (string | undefined);
+    return sid !== undefined ? sid : '';
+  }
+
+  // ==================== å†…éƒ¨æ–¹æ³• ====================
+
+  private writeItemsToDataObject(): void {
+    if (!this.dataObject) {
+      return;
+    }
+    this.dataObject['itemsJson'] = JSON.stringify(this.todoItems);
+    const currentVersion: number | undefined = this.dataObject['version'] as (number | undefined);
+    this.dataObject['version'] = (currentVersion !== undefined ? currentVersion : 0) + 1;
+    this.notifyListeners();
+  }
+
+  private loadFromDataObject(): void {
+    if (!this.dataObject) {
+      return;
+    }
+    const itemsJson: string | undefined = this.dataObject['itemsJson'] as (string | undefined);
+    if (itemsJson !== undefined && itemsJson.length > 0) {
+      try {
+        const parsed: TodoItem[] = JSON.parse(itemsJson);
+        this.todoItems = parsed;
+        this.notifyListeners();
+      } catch (e) {
+        Logger.error(TAG, `Failed to parse itemsJson: ${e}`);
+      }
+    }
+  }
+
+  private handleDataChange(): void {
+    this.loadFromDataObject();
+  }
+
+  private handleStatusChange(networkId: string, status: string): void {
+    if (status === 'online') {
+      let found = false;
+      for (let i = 0; i < this.onlineDevices.length; i++) {
+        if (this.onlineDevices[i].networkId === networkId) {
+          this.onlineDevices[i].status = status;
+          found = true;
+          break;
+        }
+      }
+      if (!found) {
+        this.onlineDevices.push({ networkId: networkId, status: status });
+      }
+    } else if (status === 'offline') {
+      const filtered: Array<DeviceInfo> = [];
+      for (let i = 0; i < this.onlineDevices.length; i++) {
+        if (this.onlineDevices[i].networkId !== networkId) {
+          filtered.push(this.onlineDevices[i]);
+        }
+      }
+      this.onlineDevices = filtered;
+    } else if (status === 'restored') {
+      Logger.info(TAG, 'Data restored from persistence');
+      this.loadFromDataObject();
+    }
+
+    for (let i = 0; i < this.statusListeners.length; i++) {
+      this.statusListeners[i](networkId, status);
+    }
+  }
+
+  private notifyListeners(): void {
+    const items: Array<TodoItem> = [];
+    for (let i = 0; i < this.todoItems.length; i++) {
+      items.push(this.todoItems[i]);
+    }
+    for (let i = 0; i < this.changeListeners.length; i++) {
+      this.changeListeners[i](items);
+    }
+  }
+
+  private findIndex(id: string): number {
+    for (let i = 0; i < this.todoItems.length; i++) {
+      if (this.todoItems[i].id === id) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  private findFirstCompleted(list: Array<TodoItem>): number {
+    for (let i = 0; i < list.length; i++) {
+      if (list[i].completed) {
+        return i;
+      }
+    }
+    return -1;
+  }
+}
+ÀÔrE“Ù @ohos.data.distributedDataObjectµ../common/util/Loggerª./TodoItemÔrF—ªassertions¨external¢id¤meta±moduleSideEffectsªresolvedByµsyntheticNamedExportsAÃÙe hvigor_ignore_E:_DevEco Studio_sdk_default_openharmony_ets_api_@ohos.data.distributedDataObject.d.tsÔrG‘¯hostModulesInfo‘CÙ @ohos.data.distributedDataObject¥entryÃªoh-resolveÂFAÂÙMD:\software\SimpleCalculator-master\entry\src\main\ets\common\util\Logger.etsAÃªoh-resolveÂFAÂÙID:\software\SimpleCalculator-master\entry\src\main\ets\model\TodoItem.etsAÃªoh-resolveÂ“ÔrH–§version¤fileªsourceRoot§sources¥names¨mappings·DistributedTodoModel.js ‘¸DistributedTodoModel.etsÜG–”    ”  	”  ”"  &”ÌD  4”ÌE  5–”   ” ” ” ”* *”+ +š”   ” ”	 	” ” ”! !”# #”) )”5 5”6 6–”   ” ”	 	” ”" "”# #‘”   ‘” ””   ” ” ”! !‘”  •” 
+” ” Ì@” ÌD” ÌE•” 
+” ” '” )” *•” 
+” ” ÌE”! ÌG”" ÌH•” 
+” ” ÌP”! ÌR”" ÌS•” 
+” ” -” /”  0’” Íj ” Íj‘” ‘” ˜” ”	 ”
+ ” ” ” $” &”! 8–” ” ” ” ” ” š” ” ” ” ” ” ” ”ÌG ÌA”ÌH ÌB”ÌI ÌC™” ” ” ” ”" ”# ”. (”/ 3”0 4‘”	 ˜” !” !
+” !” !” !”) !%”+ !'”, !(”” "” "” "” "—” #” #” #” #” #”( #"”) ##‘”	 $” &” &” &	” &” &”/ &+”0 &,”6 &2”7 &3”> &:”Ì@ &<”ÌF &ÌB”ÌG &ÌC”ÌH &ÌD’” (” (Ÿ” )” )” )	” )” )” )” )”# )”% )!”& )"”6 ):”8 )<”> )ÌQ”Ì@ )ÌS”ÌB )ÌUÜ ” *” *” *” *” *” *” *”9 *3”ÌI *ÌC”ÌV *ÌP”ÌZ *ÌT”Ì[ *ÌU”Ìd *Ì^”Ìe *Ì_”Ìk *Ìe”Ìl *Ìf”Ìn *Ìh”Ìo *Ìi”Ìp *Ìj–” +” +
+” +”! +”# +”$ +”” ,”	 ,”
+ ,” ,’” .” .Ü ” /” /” /	” /” /” /” /”# /”% /!”& /"”5 /9”7 /;”Ì@ /ÌL”ÌB /ÌN”ÌH /Ì\”ÌJ /Ì^”ÌL /Ì`Ü ” 0” 0” 0” 0” 0” 0” 0”: 04”ÌI 0ÌC”ÌX 0ÌR”Ìa 0Ì[”Ìm 0Ìg”Ìs 0Ìm”Ìu 0Ìo”Ìv 0Ìp”Ìw 0Ìqš” 1” 1
+” 1”# 1”$ 1”- 1'”/ 1)”5 1/”6 10”7 11”” 2”	 2”
+ 2” 2›” 4” 4
+” 4” 4”( 4$”, 4(”ÌA 4=”ÌB 4>”ÌN 4ÌJ”ÌP 4ÌL”ÌQ 4ÌM›” 5” 5
+” 5” 5” 5” 5”* 5&”+ 5'”9 55”: 56”; 57œ” 6” 6
+” 6” 6” 6” 6” 6”, 6(”: 66”< 68”= 69”> 6:•” 8” 8” 8	” 8” 8—” 9” 9
+” 9” 9” 9” 9”  9–” :” :
+” :”' :!”) :#”* :$‘”	 ;‘” ;–” <” <
+” <”# <”% <”& < ‘”	 =”” ?” ?” ?” ?’” Ì@” Ì@‘” ÌB‘” ÌD”” ÌE”	 ÌE”
+ ÌE” ÌE—” ÌF” ÌF” ÌF	” ÌF” ÌF” ÌF” ÌFš” ÌG” ÌG” ÌG” ÌG” ÌG” ÌG” ÌG”ÌF ÌGÌ@”ÌG ÌGÌA”ÌH ÌGÌB’” ÌH” ÌH‘”	 ÌI’” ÌJ” ÌJ” ÌK” ÌK” ÌK” ÌKÌ@”! ÌKÌF”% ÌKÌJ”& ÌKÌK”0 ÌKÌU”1 ÌKÌV”5 ÌKÌZ”6 ÌKÌ[”= ÌKÌb”> ÌKÌc”? ÌKÌdÜ ” ÌL” ÌL” ÌL” ÌL” ÌL” ÌL” ÌL”9 ÌL3”? ÌL9”Ì@ ÌL:”ÌI ÌLÌC”ÌV ÌLÌP”Ì\ ÌLÌV”Ì] ÌLÌW”Ìd ÌLÌ^”Ìf ÌLÌ`”Ìg ÌLÌa”Ìh ÌLÌb‘”	 ÌM”” ÌM” ÌM” ÌM” ÌM–” ÌN” ÌN” ÌN” ÌN” ÌN(” ÌN)Ü ” ÌO” ÌO” ÌO” ÌO” ÌO” ÌO” ÌO”7 ÌO1”< ÌO6”= ÌO7”ÌA ÌO;”ÌE ÌO?”ÌJ ÌOÌD”ÌK ÌOÌE”ÌR ÌOÌL”ÌT ÌOÌN”ÌU ÌOÌO”ÌV ÌOÌP‘”	 ÌP’” ÌQ” ÌQ‘” ÌS‘” ÌU”” ÌV”	 ÌV”
+ ÌV” ÌV—” ÌW” ÌW” ÌW	” ÌW” ÌW” ÌW” ÌW’” ÌX” ÌX‘”	 ÌY’” ÌZ” ÌZ›” Ì[” Ì[” Ì[” Ì[”! Ì[”" Ì[”. Ì[(”/ Ì[)”1 Ì[+”2 Ì[,”3 Ì[-š” Ì\” Ì\” Ì\” Ì\” Ì\” Ì\” Ì\”0 Ì\*”1 Ì\+”2 Ì\,‘”	 Ì]”” Ì]” Ì]” Ì]” Ì]–” Ì^” Ì^” Ì^” Ì^” Ì^(” Ì^)Ü ” Ì_” Ì_” Ì_” Ì_” Ì_” Ì_” Ì_”: Ì_4”? Ì_9”Ì@ Ì_:”ÌD Ì_>”ÌH Ì_ÌB”ÌM Ì_ÌG”ÌN Ì_ÌH”ÌU Ì_ÌO”ÌW Ì_ÌQ”ÌX Ì_ÌR”ÌY Ì_ÌS‘”	 Ì`’” Ìa” Ìa‘” Ìc‘” Ìe’” Ìf” Ìf	–” Ìg” Ìg” Ìg” Ìg” Ìg” Ìgš” Ìh” Ìh
+” Ìh” Ìh” Ìh” Ìh”  Ìh”( Ìh"”) Ìh#”* Ìh$š” Ìi” Ìi
+” Ìi” Ìi” Ìi” Ìi”  Ìi”( Ìi"”) Ìi#”* Ìi$—” Ìj” Ìj
+” Ìj” Ìj” Ìj”" Ìj”# Ìj‘”	 Ìk—” Ìl” Ìl” Ìl	” Ìl” Ìl”! Ìl”" Ìl—” Ìm” Ìm” Ìm	” Ìm” Ìm”! Ìm”" Ìm—” Ìn” Ìn” Ìn	” Ìn” Ìn” Ìn” Ìnš” Ìo” Ìo
+” Ìo” Ìo” Ìo” Ìo” Ìo”9 Ìo5”: Ìo6”; Ìo7’” Ìp” Ìp’” Ìr”5 Ìr3’” Ìt” Ìt
+–” Ìu” Ìu
+” Ìu” Ìu$” Ìu&” Ìu'Ü ” Ìv” Ìv	” Ìv” Ìv” Ìv” Ìv” Ìv” Ìv” Ìv”  Ìv”! Ìv”* Ìv&”+ Ìv'”1 Ìv-”3 Ìv/”4 Ìv0”6 Ìv2”8 Ìv4” Ìw” Ìw” Ìw” Ìw” Ìw” Ìw” Ìw”& Ìw ”' Ìw!”( Ìw"”) Ìw#”* Ìw$”+ Ìw%‘”	 Ìx”” Ìy” Ìy” Ìy” Ìy’” Ìz” Ìz’” Ì|” Ì|–” Ì}” Ì}” Ì}” Ì}” Ì}” Ì}Ü ” Ì~” Ì~	” Ì~” Ì~” Ì~” Ì~” Ì~” Ì~” Ì~”  Ì~”! Ì~”* Ì~&”+ Ì~'”1 Ì~-”3 Ì~/”4 Ì~0”6 Ì~2”8 Ì~4œ” Ì” Ì
+” Ì” Ì” Ì” Ì”  Ì”! Ì”" Ì”# Ì”, Ì&”. Ì(”” Ì€” Ì€” Ì€” Ì€‘” Ì‘”	 Ì‚”” Ìƒ” Ìƒ” Ìƒ” Ìƒ’” Ì„” Ì„”” Ì†” Ì†	” Ì†
+” Ì†™” Ì‡” Ì‡
+” Ì‡” Ì‡” Ì‡” Ì‡”" Ì‡”$ Ì‡ ”% Ì‡!˜” Ìˆ” Ìˆ” Ìˆ” Ìˆ” Ìˆ” Ìˆ”  Ìˆ”" Ìˆ’” Ì‰” Ì‰‘”	 ÌŠš” Ì‹” Ì‹
+” Ì‹” Ì‹” Ì‹”$ Ì‹ ”% Ì‹!”, Ì‹(”- Ì‹)”. Ì‹*˜” ÌŒ” ÌŒ
+” ÌŒ” ÌŒ%” ÌŒ&”  ÌŒ-”! ÌŒ.”" ÌŒ/Ü ” Ì” Ì	” Ì” Ì” Ì” Ì” Ì” Ì” Ì”  Ì”! Ì”* Ì&”+ Ì'”1 Ì-”3 Ì/”4 Ì0”6 Ì2”8 Ì4” Ì” Ì” Ì” Ì” Ì” Ì” Ì”' Ì!”( Ì"”) Ì#”* Ì$”+ Ì%”, Ì&‘”	 Ì—” Ì” Ì” Ì	” Ì” Ì”  Ì”! Ì–” Ì‘” Ì‘” Ì‘	”# Ì‘”% Ì‘!”& Ì‘"” Ì’” Ì’
+” Ì’” Ì’” Ì’” Ì’” Ì’”( Ì’$”/ Ì’+”0 Ì’,”2 Ì’.”4 Ì’0”5 Ì’1”6 Ì’2’” Ì“” Ì“”” Ì•” Ì•” Ì•” Ì•›” Ì–” Ì–
+” Ì–” Ì–” Ì–” Ì–”$ Ì– ”% Ì–!”' Ì–#”( Ì–$”) Ì–%—” Ì—” Ì—” Ì—” Ì—” Ì—” Ì—” Ì—’” Ì˜” Ì˜‘”	 Ì™Ü ” Ìš” Ìš” Ìš	” Ìš” Ìš” Ìš” Ìš” Ìš”' Ìš#”* Ìš&”+ Ìš'”/ Ìš+”0 Ìš,”9 Ìš5”: Ìš6”? Ìš;”Ì@ Ìš<”ÌA Ìš=”ÌJ ÌšÌF”ÌK ÌšÌGŸ” Ì›” Ì›” Ì›	” Ì›” Ì›” Ì›” Ì›” Ì›”( Ì›$”+ Ì›'”/ Ì›+”0 Ì›,”3 Ì›/”5 Ì›1”6 Ì›2›” Ì” Ì
+” Ì” Ì” Ì” Ì”& Ì"”' Ì#”, Ì(”- Ì)”. Ì*–” Ì” Ì
+” Ì” Ì'” Ì)” Ì*Ü ” ÌŸ” ÌŸ	” ÌŸ” ÌŸ” ÌŸ” ÌŸ” ÌŸ” ÌŸ” ÌŸ”  ÌŸ”! ÌŸ”* ÌŸ&”+ ÌŸ'”1 ÌŸ-”3 ÌŸ/”4 ÌŸ0”6 ÌŸ2”8 ÌŸ4–” Ì ” Ì 
+” Ì ” Ì ” Ì ” Ì ” Ì¡” Ì¡” Ì¡” Ì¡” Ì¡”# Ì¡”$ Ì¡”- Ì¡%”. Ì¡&”/ Ì¡'”0 Ì¡(”1 Ì¡)”2 Ì¡*‘” Ì¢‘”	 Ì£–” Ì¥” Ì¥” Ì¥” Ì¥” Ì¥” Ì¥˜” Ì¦” Ì¦” Ì¦” Ì¦” Ì¦”" Ì¦”# Ì¦”$ Ì¦‘”	 Ì§‘” Ì§›” Ì¨” Ì¨”# Ì¨”& Ì¨ ”* Ì¨$”+ Ì¨%”= Ì¨7”> Ì¨8”ÌG Ì¨ÌA”ÌH Ì¨ÌB”ÌI Ì¨ÌC—” Ì©” Ì©
+”! Ì©”& Ì© ”' Ì©!”( Ì©"”* Ì©$˜” Ìª” Ìª” Ìª” Ìª” Ìª”& Ìª”' Ìª”( Ìª ‘” Ì«‘” Ì«–” Ì¬” Ì¬” Ì¬”  Ì¬)”" Ì¬+”# Ì¬,” Ì­” Ì­” Ì­” Ì­” Ì­” Ì­”  Ì­”! Ì­”$ Ì­”5 Ì­-”7 Ì­/”8 Ì­0”: Ì­2”< Ì­4›” Ì®
+” Ì®” Ì®”  Ì®”! Ì®”* Ì® ”+ Ì®!”, Ì®"”- Ì®#”. Ì®$”/ Ì®%‘” Ì¯	˜” Ì°” Ì°” Ì°” Ì°” Ì°”$ Ì°”% Ì°”& Ì°Ü ” Ì±” Ì±” Ì±” Ì±” Ì±”. Ì±&”0 Ì±(”1 Ì±)”4 Ì±,”= Ì±5”> Ì±6”ÌD Ì±<”ÌF Ì±>”ÌG Ì±?”ÌI Ì±ÌA”ÌK Ì±ÌC›” Ì²
+” Ì²” Ì²”  Ì²”! Ì²”* Ì² ”+ Ì²!”, Ì²"”- Ì²#”. Ì²$”/ Ì²%‘” Ì³	—” Ì´” Ì´” Ì´” Ì´”! Ì´”( Ì´ ”) Ì´!–” Ìµ” Ìµ” Ìµ”+ Ìµ#”- Ìµ%”. Ìµ&’” Ì¶” Ì¶‘” Ì·‘”	 Ì¸—” Ì¹” Ì¹” Ì¹	” Ì¹” Ì¹”" Ì¹”# Ì¹–” Ìº” Ìº” Ìº	”# Ìº”% Ìº!”& Ìº"’” Ì»” Ì»–” Ì½” Ì½” Ì½” Ì½” Ì½”  Ì½.™” Ì¾” Ì¾
+” Ì¾” Ì¾”  Ì¾”! Ì¾”% Ì¾!”' Ì¾#”( Ì¾$˜” Ì¿” Ì¿” Ì¿” Ì¿” Ì¿” Ì¿”  Ì¿”" Ì¿’” ÌÀ” ÌÀ‘”	 ÌÁÜ ” ÌÂ” ÌÂ	” ÌÂ” ÌÂ” ÌÂ” ÌÂ” ÌÂ” ÌÂ” ÌÂ”  ÌÂ”! ÌÂ”* ÌÂ&”+ ÌÂ'”1 ÌÂ-”3 ÌÂ/”4 ÌÂ0”6 ÌÂ2”8 ÌÂ4” ÌÃ” ÌÃ
+” ÌÃ” ÌÃ” ÌÃ” ÌÃ”  ÌÃ”! ÌÃ”" ÌÃ”$ ÌÃ”) ÌÃ#”+ ÌÃ%”- ÌÃ'œ” ÌÄ” ÌÄ” ÌÄ” ÌÄ” ÌÄ”  ÌÄ”! ÌÄ”" ÌÄ”' ÌÄ”* ÌÄ"”1 ÌÄ)”2 ÌÄ*Ÿ” ÌÅ” ÌÅ” ÌÅ” ÌÅ” ÌÅ”  ÌÅ”! ÌÅ”" ÌÅ”, ÌÅ$”/ ÌÅ'”3 ÌÅ+”4 ÌÅ,”7 ÌÅ/”9 ÌÅ1”: ÌÅ2–” ÌÆ” ÌÆ” ÌÆ”+ ÌÆ#”- ÌÆ%”. ÌÆ&’” ÌÇ” ÌÇ‘” ÌÈ‘”	 ÌÉ’” ÌÊ” ÌÊ”” ÌÌ” ÌÌ” ÌÌ” ÌÌ–” ÌÍ” ÌÍ
+” ÌÍ” ÌÍ%” ÌÍ'” ÌÍ(Ü ” ÌÎ” ÌÎ	” ÌÎ” ÌÎ” ÌÎ” ÌÎ” ÌÎ” ÌÎ” ÌÎ”  ÌÎ”! ÌÎ”* ÌÎ&”+ ÌÎ'”1 ÌÎ-”3 ÌÎ/”4 ÌÎ0”6 ÌÎ2”8 ÌÎ4” ÌÏ” ÌÏ
+” ÌÏ” ÌÏ” ÌÏ” ÌÏ”  ÌÏ”! ÌÏ”" ÌÏ”$ ÌÏ”) ÌÏ#”+ ÌÏ%”- ÌÏ'” ÌĞ” ÌĞ” ÌĞ” ÌĞ” ÌĞ”! ÌĞ”" ÌĞ”+ ÌĞ#”, ÌĞ$”- ÌĞ%”. ÌĞ&”/ ÌĞ'”0 ÌĞ(‘” ÌÑ‘”	 ÌÒ—” ÌÓ” ÌÓ” ÌÓ	” ÌÓ” ÌÓ”  ÌÓ”! ÌÓ–” ÌÔ” ÌÔ” ÌÔ	”# ÌÔ”% ÌÔ!”& ÌÔ"’” ÌÕ” ÌÕ’” Ì×” Ì×–” ÌØ” ÌØ
+” ÌØ” ÌØ%” ÌØ'” ÌØ(Ü ” ÌÙ” ÌÙ	” ÌÙ” ÌÙ” ÌÙ” ÌÙ” ÌÙ” ÌÙ” ÌÙ”  ÌÙ”! ÌÙ”* ÌÙ&”+ ÌÙ'”1 ÌÙ-”3 ÌÙ/”4 ÌÙ0”6 ÌÙ2”8 ÌÙ4œ” ÌÚ” ÌÚ
+” ÌÚ” ÌÚ” ÌÚ” ÌÚ”  ÌÚ”! ÌÚ”" ÌÚ”# ÌÚ”, ÌÚ&”. ÌÚ(” ÌÛ” ÌÛ” ÌÛ” ÌÛ” ÌÛ”! ÌÛ”" ÌÛ”+ ÌÛ#”, ÌÛ$”- ÌÛ%”. ÌÛ&”/ ÌÛ'”0 ÌÛ(‘” ÌÜ‘”	 Ìİ—” ÌŞ” ÌŞ” ÌŞ	” ÌŞ” ÌŞ”  ÌŞ”! ÌŞ–” Ìß” Ìß” Ìß	”# Ìß”% Ìß!”& Ìß"’” Ìà” Ìà’” Ìâ”4 Ìâ2”” Ìä” Ìä” Ìä” Ìä9š” Ìå” Ìå” Ìå	” Ìå” Ìå”! Ìå”" Ìå”* Ìå&”+ Ìå'”, Ìå(’” Ìæ” Ìæ”” Ìè” Ìè” Ìè” Ìè:–” Ìé” Ìé
+” Ìé” Ìé>” ÌéÌ@” ÌéÌAÜ ” Ìê” Ìê	” Ìê” Ìê” Ìê” Ìê” Ìê” Ìê” Ìê”  Ìê”! Ìê”0 Ìê,”1 Ìê-”7 Ìê3”9 Ìê5”: Ìê6”< Ìê8”> Ìê:›” Ìë” Ìë
+” Ìë” Ìë”$ Ìë”% Ìë”& Ìë ”' Ìë!”, Ìë&”4 Ìë.”6 Ìë0” Ìì” Ìì” Ìì” Ìì” Ìì”" Ìì”# Ìì”2 Ìì*”3 Ìì+”4 Ìì,”5 Ìì-”6 Ìì.”7 Ìì/‘” Ìí‘”	 Ìî—” Ìï” Ìï” Ìï	” Ìï” Ìï”' Ìï#”( Ìï$’” Ìğ” Ìğ”” Ìò” Ìò” Ìò” ÌòÌFš” Ìó” Ìó” Ìó	” Ìó” Ìó”! Ìó”" Ìó”* Ìó&”+ Ìó'”, Ìó(’” Ìô” Ìô”” Ìö” Ìö” Ìö” ÌöÌG–” Ì÷” Ì÷
+” Ì÷” Ì÷ÌI” Ì÷ÌK” Ì÷ÌLÜ ” Ìø” Ìø	” Ìø” Ìø” Ìø” Ìø” Ìø” Ìø” Ìø”  Ìø”! Ìø”0 Ìø,”1 Ìø-”7 Ìø3”9 Ìø5”: Ìø6”< Ìø8”> Ìø:›” Ìù” Ìù
+” Ìù” Ìù”$ Ìù”% Ìù”& Ìù ”' Ìù!”, Ìù&”4 Ìù.”6 Ìù0” Ìú” Ìú” Ìú” Ìú” Ìú”" Ìú”# Ìú”2 Ìú*”3 Ìú+”4 Ìú,”5 Ìú-”6 Ìú.”7 Ìú/‘” Ìû‘”	 Ìü—” Ìı” Ìı” Ìı	” Ìı” Ìı”' Ìı#”( Ìı$’” Ìş” Ìş’” Í ” Í –” Í” Í
+” Í” Í&” Í(” Í)Ü ” Í” Í	” Í” Í” Í” Í” Í” Í” Í”  Í”! Í”. Í*”/ Í+”5 Í1”7 Í3”8 Í4”: Í6”< Í8Ü ” Í” Í” Í” Í” Í” Í”# Í”% Í”) Í#”* Í$”7 Í1”8 Í2”9 Í3”: Í4”; Í5”ÌD Í>”ÌF ÍÌ@”ÌL ÍÌF”ÌN ÍÌH”ÌR ÍÌL”ÌS ÍÌM”Ì` ÍÌZ”Ìa ÍÌ[”Ìb ÍÌ\”Ìc ÍÌ]”Ìd ÍÌ^”Ìj ÍÌd”Ìl ÍÌf”Ìm ÍÌg”Ìn ÍÌh‘”	 Í”” Í” Í” Í” Í’” Í” Í’” Í” Í—” Í	” Í	” Í		” Í	” Í	” Í	” Í	”” Í
+” Í
+” Í
+” Í
+‘”	 Í›” Í” Í
+” Í” Í$” Í(” Í)”# Í3”$ Í4”/ Í?”0 ÍÌX”1 ÍÌY” Í” Í” Í” Í”  Í”! Í”" Í”# Í”& Í"”' Í#”( Í$”) Í%”+ Í'”, Í(’” Í” Í’” Í”5 Í3’” Í
+” Í —” Í” Í” Í	” Í” Í” Í” Í’” Í” Í‘”	 ÍÜ ” Í” Í” Í	” Í” Í”# Í”$ Í ”' Í#”+ Í'”, Í(”5 Í1”6 Í2”: Í6”; Í7”ÌD ÍÌ@”ÌE ÍÌA”ÌF ÍÌB›” Í” Í
+” Í” Í/”# Í3”$ Í4”. Í>”/ Í?”8 ÍÌH”9 ÍÌa”: ÍÌbÜ ” Í” Í” Í	” Í” Í”! Í”" Í”% Í!”& Í"”4 Í0”9 Í5”ÌB Í>”ÌC Í?”ÌD ÍÌ@”ÌE ÍÌA”ÌS ÍÌO”ÌT ÍÌP”ÌU ÍÌQ”ÌV ÍÌR”ÌW ÍÌS”ÌX ÍÌT”Ì[ ÍÌW”Ì\ ÍÌX”Ì] ÍÌY–” Í” Í” Í	” Í” Í” Í’” Í” Í’” Í
+” Í—” Í” Í” Í	” Í” Í” Í” Í’” Í” Í‘”	 Í›” Í ” Í 
+” Í ” Í *” Í .” Í /”) Í 9”* Í :”5 Í ÌE”6 Í Ì^”7 Í Ì_œ” Í!” Í!” Í!” Í!”# Í!”' Í!#”0 Í!,”1 Í!-”7 Í!3”: Í!6”; Í!7”= Í!9’” Í"” Í"
+›” Í#” Í#” Í#” Í##”# Í#'”$ Í#(”) Í#-”* Í#.”3 Í#7”4 Í#8”5 Í#9—” Í$” Í$” Í$” Í$”! Í$”' Í$”( Í$ –” Í%” Í%” Í%”$ Í%”& Í%”' Í%‘” Í&”” Í&” Í&” Í&” Í&œ” Í'” Í'” Í'” Í'” Í'”  Í'”" Í'”Ì@ Í'8”ÌA Í'9”ÌC Í';”ÌD Í'<”ÌE Í'=‘” Í(‘”	 Í)’” Í*” Í*’” Í,
+” Í,–” Í-” Í-” Í-	” Í-”! Í-”" Í-’” Í.” Í.–” Í0
+” Í0” Í0”  Í0.”" Í00”( Í0>–” Í1” Í1” Í1” Í1” Í1”! Í1–” Í2” Í2
+” Í2” Í2” Í2” Í2Ü ” Í3” Í3” Í3” Í3” Í3” Í3” Í3” Í3”  Í3”$ Í3”% Í3”2 Í3,”3 Í3-”9 Í33”; Í35”< Í36”> Í38”Ì@ Í3:” Í4” Í4” Í4” Í4”& Í4”' Í4”( Í4 ”) Í4!”* Í4"”3 Í4+”8 Í40”ÌA Í49”ÌC Í4;œ” Í5
+” Í5” Í5”& Í5”' Í5”( Í5”) Í5”* Í5 ”0 Í5&”3 Í5)”9 Í5/”: Í50•” Í6
+” Í6” Í6”  Í6”! Í6’” Í7
+” Í7‘” Í8	‘” Í9•” Í:” Í:
+” Í:” Í:” Í:Ü ” Í;” Í;” Í;”" Í;”# Í;”' Í;”( Í; ”* Í;"”3 Í;+”5 Í;-”> Í;6”Ì@ Í;8”ÌF Í;>”ÌH Í;Ì@”ÌN Í;ÌF”ÌP Í;ÌH”ÌQ Í;ÌI”ÌR Í;ÌJ‘” Í<‘”	 Í=–” Í=” Í=” Í=” Í=”% Í=#”' Í=%–” Í>” Í>” Í>” Í>*” Í>,”  Í>-Ü ” Í?” Í?” Í?” Í?” Í?” Í?” Í?” Í?”  Í?”$ Í?”% Í?”2 Í?,”3 Í?-”9 Í?3”; Í?5”< Í?6”> Í?8”Ì@ Í?:” Í@” Í@” Í@” Í@”& Í@”' Í@”( Í@ ”) Í@!”* Í@"”3 Í@+”8 Í@0”ÌA Í@9”ÌC Í@;” ÍA
+” ÍA” ÍA”! ÍA”" ÍA”& ÍA”' ÍA”4 ÍA*”5 ÍA+”6 ÍA,”7 ÍA-”8 ÍA.”9 ÍA/‘” ÍB	‘” ÍC—” ÍD” ÍD
+” ÍD” ÍD”! ÍD”) ÍD#”* ÍD$‘”	 ÍE–” ÍE” ÍE” ÍE” ÍE”& ÍE$”( ÍE&š” ÍF” ÍF” ÍF” ÍF” ÍF” ÍF” ÍF”= ÍF7”> ÍF8”? ÍF9–” ÍG” ÍG
+” ÍG”# ÍG”% ÍG”& ÍG ‘”	 ÍHÜ ” ÍJ” ÍJ	” ÍJ” ÍJ” ÍJ” ÍJ” ÍJ” ÍJ” ÍJ”  ÍJ”! ÍJ”0 ÍJ,”1 ÍJ-”7 ÍJ3”9 ÍJ5”: ÍJ6”< ÍJ8”> ÍJ:” ÍK” ÍK
+” ÍK”  ÍK”! ÍK”" ÍK”# ÍK”$ ÍK”- ÍK'”/ ÍK)”5 ÍK/”6 ÍK0”7 ÍK1‘”	 ÍL’” ÍM” ÍM’” ÍO
+” ÍO–” ÍP” ÍP
+” ÍP” ÍP#” ÍP%” ÍP&Ü ” ÍQ” ÍQ	” ÍQ” ÍQ” ÍQ” ÍQ” ÍQ” ÍQ” ÍQ”  ÍQ”! ÍQ”* ÍQ&”+ ÍQ'”1 ÍQ-”3 ÍQ/”4 ÍQ0”6 ÍQ2”8 ÍQ4” ÍR” ÍR” ÍR” ÍR” ÍR” ÍR” ÍR”% ÍR”& ÍR ”' ÍR!”( ÍR"”) ÍR#”* ÍR$‘”	 ÍSÜ ” ÍT” ÍT	” ÍT” ÍT” ÍT” ÍT” ÍT” ÍT” ÍT”  ÍT”! ÍT”0 ÍT,”1 ÍT-”7 ÍT3”9 ÍT5”: ÍT6”< ÍT8”> ÍT:›” ÍU” ÍU
+” ÍU”  ÍU”! ÍU”" ÍU”# ÍU”$ ÍU”) ÍU#”* ÍU$”+ ÍU%‘”	 ÍV’” ÍW” ÍW”” ÍY
+” ÍY” ÍY” ÍYÜ ” ÍZ” ÍZ	” ÍZ” ÍZ” ÍZ” ÍZ” ÍZ” ÍZ” ÍZ”  ÍZ”! ÍZ”* ÍZ&”+ ÍZ'”1 ÍZ-”3 ÍZ/”4 ÍZ0”6 ÍZ2”8 ÍZ4” Í[” Í[
+” Í[” Í[” Í[” Í[”  Í[”! Í[”" Í[”$ Í[”) Í[#”+ Í[%”- Í['”” Í\” Í\” Í\” Í\‘” Í]‘”	 Í^•” Í_” Í_” Í_” Í_” Í_’” Í`” Í`”” Íb
+” Íb” Íb” Íb2Ü ” Íc” Íc	” Íc” Íc” Íc” Íc” Íc” Íc” Íc”  Íc”! Íc”' Íc#”) Íc%”* Íc&”, Íc(”. Íc*™” Íd” Íd
+” Íd” Íd” Íd” Íd” Íd”! Íd”# Íd”” Íe” Íe” Íe” Íe‘” Íf‘”	 Íg•” Íh” Íh” Íh” Íh” Íh’” Íi” Íi‘” ÍjÔrI–§version¤file§sources®sourcesContent¥names¨mappingsÀ‘À‘ÀÜH‘”    ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”  	 ‘”  
+ ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”   ‘”    ‘”  ! ‘”  " ‘”  # ‘”  $ ‘”  % ‘”  & ‘”  ' ‘”  ( ‘”  ) ‘”  * ‘”  + ‘”  , ‘”  - ‘”  . ‘”  / ‘”  0 ‘”  1 ‘”  2 ‘”  3 ‘”  4 ‘”  5 ‘”  6 ‘”  7 ‘”  8 ‘”  9 ‘”  : ‘”  ; ‘”  < ‘”  = ‘”  > ‘”  ? ‘”  Ì@ ‘”  ÌA ‘”  ÌB ‘”  ÌC ‘”  ÌD ‘”  ÌE ‘”  ÌF ‘”  ÌG ‘”  ÌH ‘”  ÌI ‘”  ÌJ ‘”  ÌK ‘”  ÌL ‘”  ÌM ‘”  ÌN ‘”  ÌO ‘”  ÌP ‘”  ÌQ ‘”  ÌR ‘”  ÌS ‘”  ÌT ‘”  ÌU ‘”  ÌV ‘”  ÌW ‘”  ÌX ‘”  ÌY ‘”  ÌZ ‘”  Ì[ ‘”  Ì\ ‘”  Ì] ‘”  Ì^ ‘”  Ì_ ‘”  Ì` ‘”  Ìa ‘”  Ìb ‘”  Ìc ‘”  Ìd ‘”  Ìe ‘”  Ìf ‘”  Ìg ‘”  Ìh ‘”  Ìi ‘”  Ìj ‘”  Ìk ‘”  Ìl ‘”  Ìm ‘”  Ìn ‘”  Ìo ‘”  Ìp ‘”  Ìq ‘”  Ìr ‘”  Ìs ‘”  Ìt ‘”  Ìu ‘”  Ìv ‘”  Ìw ‘”  Ìx ‘”  Ìy ‘”  Ìz ‘”  Ì{ ‘”  Ì| ‘”  Ì} ‘”  Ì~ ‘”  Ì ‘”  Ì€ ‘”  Ì ‘”  Ì‚ ‘”  Ìƒ ‘”  Ì„ ‘”  Ì… ‘”  Ì† ‘”  Ì‡ ‘”  Ìˆ ‘”  Ì‰ ‘”  ÌŠ ‘”  Ì‹ ‘”  ÌŒ ‘”  Ì ‘”  Ì ‘”  Ì ‘”  Ì ‘”  Ì‘ ‘”  Ì’ ‘”  Ì“ ‘”  Ì” ‘”  Ì• ‘”  Ì– ‘”  Ì— ‘”  Ì˜ ‘”  Ì™ ‘”  Ìš ‘”  Ì› ‘”  Ìœ ‘”  Ì ‘”  Ì ‘”  ÌŸ ‘”  Ì  ‘”  Ì¡ ‘”  Ì¢ ‘”  Ì£ ‘”  Ì¤ ‘”  Ì¥ ‘”  Ì¦ ‘”  Ì§ ‘”  Ì¨ ‘”  Ì© ‘”  Ìª ‘”  Ì« ‘”  Ì¬ ‘”  Ì­ ‘”  Ì® ‘”  Ì¯ ‘”  Ì° ‘”  Ì± ‘”  Ì² ‘”  Ì³ ‘”  Ì´ ‘”  Ìµ ‘”  Ì¶ ‘”  Ì· ‘”  Ì¸ ‘”  Ì¹ ‘”  Ìº ‘”  Ì» ‘”  Ì¼ ‘”  Ì½ ‘”  Ì¾ ‘”  Ì¿ ‘”  ÌÀ ‘”  ÌÁ ‘”  ÌÂ ‘”  ÌÃ ‘”  ÌÄ ‘”  ÌÅ ‘”  ÌÆ ‘”  ÌÇ ‘”  ÌÈ ‘”  ÌÉ ‘”  ÌÊ ‘”  ÌË ‘”  ÌÌ ‘”  ÌÍ ‘”  ÌÎ ‘”  ÌÏ ‘”  ÌĞ ‘”  ÌÑ ‘”  ÌÒ ‘”  ÌÓ ‘”  ÌÔ ‘”  ÌÕ ‘”  ÌÖ ‘”  Ì× ‘”  ÌØ ‘”  ÌÙ ‘”  ÌÚ ‘”  ÌÛ ‘”  ÌÜ ‘”  Ìİ ‘”  ÌŞ ‘”  Ìß ‘”  Ìà ‘”  Ìá ‘”  Ìâ ‘”  Ìã ‘”  Ìä ‘”  Ìå ‘”  Ìæ ‘”  Ìç ‘”  Ìè ‘”  Ìé ‘”  Ìê ‘”  Ìë ‘”  Ìì ‘”  Ìí ‘”  Ìî ‘”  Ìï ‘”  Ìğ ‘”  Ìñ ‘”  Ìò ‘”  Ìó ‘”  Ìô ‘”  Ìõ ‘”  Ìö ‘”  Ì÷ ‘”  Ìø ‘”  Ìù ‘”  Ìú ‘”  Ìû ‘”  Ìü ‘”  Ìı ‘”  Ìş ‘”  Ìÿ ‘”  Í  ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í	 ‘”  Í
+ ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í ‘”  Í  ‘”  Í! ‘”  Í" ‘”  Í# ‘”  Í$ ‘”  Í% ‘”  Í& ‘”  Í' ‘”  Í( ‘”  Í) ‘”  Í* ‘”  Í+ ‘”  Í, ‘”  Í- ‘”  Í. ‘”  Í/ ‘”  Í0 ‘”  Í1 ‘”  Í2 ‘”  Í3 ‘”  Í4 ‘”  Í5 ‘”  Í6 ‘”  Í7 ‘”  Í8 ‘”  Í9 ‘”  Í: ‘”  Í; ‘”  Í< ‘”  Í= ‘”  Í> ‘”  Í? ‘”  Í@ ‘”  ÍA ‘”  ÍB ‘”  ÍC ‘”  ÍD ‘”  ÍE ‘”  ÍF ‘”  ÍG ÔrJ’§missing¦pluginÃ¦genAbcÂÔ  ÔrK”²dynamicImportCache¹exportAllDeclarationCache»exportNamedDeclarationCache«importCache‘ÔrL–¤type¥start£end«declarationªspecifiers¦source¶ExportNamedDeclarationÍÍ*îÔrM–¤type¥start£end¢idªsuperClass¤body°ClassDeclarationÍÍ*îÔrN”¤type¥start£end¤nameªIdentifierÍ$Í8´DistributedTodoModelÀÔrO”¤type¥start£end¤body©ClassBodyÍ9Í*îÜ ÔrP˜¤type¥start£end¦static¨computed£key¤kind¥value°MethodDefinitionÍ@ÍÿÂÂNªIdentifierÍ@ÍK«constructor«constructorÔrQ™¤type¥start£end¢idªexpression©generator¥async¦params¤body²FunctionExpressionÍKÍÿÀÂÂÂO®BlockStatementÍNÍÿ•ÔrR”¤type¥start£endªexpression³ExpressionStatementÍYÍpÔrS–¤type¥start£end¨operator¤left¥right´AssignmentExpressionÍYÍo¡=ÔrT—¤type¥start£end¦object¨property¨computed¨optional°MemberExpressionÍYÍhÔrU“¤type¥start£end®ThisExpressionÍYÍ]NªIdentifierÍ^ÍhªdataObjectÂÂÔrV•¤type¥start£end¥value£raw§LiteralÍkÍoÀ¤nullR³ExpressionStatementÍzÍS´AssignmentExpressionÍzÍ¡=T°MemberExpressionÍzÍˆU®ThisExpressionÍzÍ~NªIdentifierÍÍˆ©todoItemsÂÂÔrW”¤type¥start£end¨elements¯ArrayExpressionÍ‹ÍR³ExpressionStatementÍ˜Í²S´AssignmentExpressionÍ˜Í±¡=T°MemberExpressionÍ˜Í¬U®ThisExpressionÍ˜ÍœNªIdentifierÍÍ¬¯changeListenersÂÂW¯ArrayExpressionÍ¯Í±R³ExpressionStatementÍ¼ÍÖS´AssignmentExpressionÍ¼ÍÕ¡=T°MemberExpressionÍ¼ÍĞU®ThisExpressionÍ¼ÍÀNªIdentifierÍÁÍĞ¯statusListenersÂÂW¯ArrayExpressionÍÓÍÕR³ExpressionStatementÍàÍøS´AssignmentExpressionÍàÍ÷¡=T°MemberExpressionÍàÍòU®ThisExpressionÍàÍäNªIdentifierÍåÍò­onlineDevicesÂÂW¯ArrayExpressionÍõÍ÷P°MethodDefinitionÍ0Í’ÂÂNªIdentifierÍ6Í:¤init¦methodQ²FunctionExpressionÍ:Í’ÀÂÂÃ’NªIdentifierÍ;ÍB§contextNªIdentifierÍDÍM©sessionIdO®BlockStatementÍOÍ’›ÔrX–¤type¥start£end¤testªconsequent©alternate«IfStatementÍZÍøT°MemberExpressionÍ^ÍmU®ThisExpressionÍ^ÍbNªIdentifierÍcÍmªdataObjectÂÂO®BlockStatementÍoÍø’R³ExpressionStatementÍ~Í»ÔrY–¤type¥start£end¦callee©arguments¨optional®CallExpressionÍ~ÍºT°MemberExpressionÍ~Í‰NªIdentifierÍ~Í„¦LoggerNªIdentifierÍ…Í‰¤infoÂÂ’NªIdentifierÍŠÍ£TAGV§LiteralÍÍ¹Ù(DistributedTodoModel already initializedÙ*'DistributedTodoModel already initialized'ÂÔrZ”¤type¥start£end¨argument¯ReturnStatementÍÉÍíT°MemberExpressionÍĞÍìT°MemberExpressionÍĞÍßU®ThisExpressionÍĞÍÔNªIdentifierÍÕÍßªdataObjectÂÂV§LiteralÍàÍë©sessionId«'sessionId'ÃÂÀÔr[•¤type¥start£end¬declarations¤kind³VariableDeclarationÍÍ&‘Ôr\•¤type¥start£end¢id¤init²VariableDeclaratorÍÍ%NªIdentifierÍÍ¦sourceÔr]•¤type¥start£end¦callee©arguments­NewExpressionÍÍ%NªIdentifierÍÍ#®TodoDataSource¥constX«IfStatementÍ0ÍvNªIdentifierÍ4Í=©sessionIdO®BlockStatementÍ?Ív‘R³ExpressionStatementÍNÍkS´AssignmentExpressionÍNÍj¡=T°MemberExpressionÍNÍ^NªIdentifierÍNÍT¦sourceNªIdentifierÍUÍ^©sessionIdÂÂNªIdentifierÍaÍj©sessionIdÀR³ExpressionStatementÍ€ÍÀS´AssignmentExpressionÍ€Í¿¡=T°MemberExpressionÍ€ÍU®ThisExpressionÍ€Í„NªIdentifierÍ…ÍªdataObjectÂÂY®CallExpressionÍ’Í¿T°MemberExpressionÍ’Í®NªIdentifierÍ’Í§µdistributedDataObjectNªIdentifierÍ¨Í®¦createÂÂ’NªIdentifierÍ¯Í¶§contextNªIdentifierÍ¸Í¾¦sourceÂR³ExpressionStatementÍßÍÀY®CallExpressionÍßÍ¿T°MemberExpressionÍßÍñT°MemberExpressionÍßÍîU®ThisExpressionÍßÍãNªIdentifierÍäÍîªdataObjectÂÂNªIdentifierÍïÍñ¢onÂÂ’V§LiteralÍòÍú¦change¨'change'Q·ArrowFunctionExpressionÍüÍ¾ÀÂÂÂ’NªIdentifierÍıÍ°changedSessionIdNªIdentifierÍÍ¦fieldsO®BlockStatementÍÍ¾’R³ExpressionStatementÍ)ÍY®CallExpressionÍ)ÍŒT°MemberExpressionÍ)Í4NªIdentifierÍ)Í/¦LoggerNªIdentifierÍ0Í4¤infoÂÂ’NªIdentifierÍ5Í8£TAGÔr^•¤type¥start£end«expressions¦quasis¯TemplateLiteralÍ:Í‹’NªIdentifierÍVÍf°changedSessionIdY®CallExpressionÍsÍ‰T°MemberExpressionÍsÍNªIdentifierÍsÍw¤JSONNªIdentifierÍxÍ©stringifyÂÂ‘NªIdentifierÍ‚Íˆ¦fieldsÂ“Ôr_•¤type¥start£end¥value¤tail¯TemplateElementÍ;ÍTÔr`’£raw¦cooked¹Data changed, sessionId: ¹Data changed, sessionId: Â_¯TemplateElementÍgÍq`ª, fields: ª, fields: Â_¯TemplateElementÍŠÍŠ`  ÃÂR³ExpressionStatementÍ›Í³Y®CallExpressionÍ›Í²T°MemberExpressionÍ›Í°U®ThisExpressionÍ›ÍŸNªIdentifierÍ Í°°handleDataChangeÂÂÂÂR³ExpressionStatementÍßÍäY®CallExpressionÍßÍãT°MemberExpressionÍßÍñT°MemberExpressionÍßÍîU®ThisExpressionÍßÍãNªIdentifierÍäÍîªdataObjectÂÂNªIdentifierÍïÍñ¢onÂÂ’V§LiteralÍòÍú¦status¨'status'Q·ArrowFunctionExpressionÍüÍâÀÂÂÂ“NªIdentifierÍıÍ¯statusSessionIdNªIdentifierÍÍ©networkIdNªIdentifierÍÍ¦statusO®BlockStatementÍ$Íâ’R³ExpressionStatementÍ3ÍY®CallExpressionÍ3ÍT°MemberExpressionÍ3Í>NªIdentifierÍ3Í9¦LoggerNªIdentifierÍ:Í>¤infoÂÂ’NªIdentifierÍ?ÍB£TAG^¯TemplateLiteralÍDÍœ“NªIdentifierÍaÍp¯statusSessionIdNªIdentifierÍÍˆ©networkIdNªIdentifierÍ”Íš¦status”_¯TemplateElementÍEÍ_`ºStatus changed: sessionId=ºStatus changed: sessionId=Â_¯TemplateElementÍqÍ}`¬, networkId=¬, networkId=Â_¯TemplateElementÍ‰Í’`©, status=©, status=Â_¯TemplateElementÍ›Í›`  ÃÂR³ExpressionStatementÍ¬Í×Y®CallExpressionÍ¬ÍÖT°MemberExpressionÍ¬ÍÃU®ThisExpressionÍ¬Í°NªIdentifierÍ±ÍÃ²handleStatusChangeÂÂ’NªIdentifierÍÄÍÍ©networkIdNªIdentifierÍÏÍÕ¦statusÂÂ[³VariableDeclarationÍîÍ7‘\²VariableDeclaratorÍôÍ6NªIdentifierÍôÍ®finalSessionIdÔra–¤type¥start£end¤left¨operator¥right±LogicalExpressionÍÍ6NªIdentifierÍÍ©sessionId¢||Y®CallExpressionÍÍ6T°MemberExpressionÍÍ4NªIdentifierÍÍ'µdistributedDataObjectNªIdentifierÍ(Í4¬genSessionIdÂÂÂ¥constR³ExpressionStatementÍAÍtZ¯AwaitExpressionÍAÍsY®CallExpressionÍGÍsT°MemberExpressionÍGÍcT°MemberExpressionÍGÍVU®ThisExpressionÍGÍKNªIdentifierÍLÍVªdataObjectÂÂNªIdentifierÍWÍc¬setSessionIdÂÂ‘NªIdentifierÍdÍr®finalSessionIdÂR³ExpressionStatementÍ~Í´Y®CallExpressionÍ~Í³T°MemberExpressionÍ~Í‰NªIdentifierÍ~Í„¦LoggerNªIdentifierÍ…Í‰¤infoÂÂ’NªIdentifierÍŠÍ£TAG^¯TemplateLiteralÍÍ²‘NªIdentifierÍ¢Í°®finalSessionId’_¯TemplateElementÍÍ `°Joined session: °Joined session: Â_¯TemplateElementÍ±Í±`  ÃÂX«IfStatementÍ¾ÍkÔrb–¤type¥start£end¨operator¦prefix¨argument¯UnaryExpressionÍÂÍÌ¡!ÃNªIdentifierÍÃÍÌ©sessionIdO®BlockStatementÍÎÍ(’R³ExpressionStatementÍİÍñS´AssignmentExpressionÍİÍğ¡=T°MemberExpressionÍİÍëU®ThisExpressionÍİÍáNªIdentifierÍâÍë©todoItemsÂÂW¯ArrayExpressionÍîÍğR³ExpressionStatementÍÿÍY®CallExpressionÍÿÍT°MemberExpressionÍÿÍU®ThisExpressionÍÿÍNªIdentifierÍÍ¶writeItemsToDataObjectÂÂÂO®BlockStatementÍ7Ík‘R³ExpressionStatementÍFÍ`Y®CallExpressionÍFÍ_T°MemberExpressionÍFÍ]U®ThisExpressionÍFÍJNªIdentifierÍKÍ]²loadFromDataObjectÂÂÂZ¯ReturnStatementÍuÍ‹NªIdentifierÍ|ÍŠ®finalSessionIdP°MethodDefinitionÍÀÍ	ÄÂÂNªIdentifierÍÆÍÏ©saveLocal¦methodQ²FunctionExpressionÍÏÍ	ÄÀÂÂÃO®BlockStatementÍÒÍ	Ä’X«IfStatementÍİÍ^b¯UnaryExpressionÍáÍñ¡!ÃT°MemberExpressionÍâÍñU®ThisExpressionÍâÍæNªIdentifierÍçÍñªdataObjectÂÂO®BlockStatementÍóÍ^’R³ExpressionStatementÍÍ>Y®CallExpressionÍÍ=T°MemberExpressionÍÍNªIdentifierÍÍ¦LoggerNªIdentifierÍ	Í¤warnÂÂ’NªIdentifierÍÍ£TAGV§LiteralÍÍ<Ù'DataObject not initialized, cannot saveÙ)'DataObject not initialized, cannot save'ÂZ¯ReturnStatementÍLÍSÀÀÔrc–¤type¥start£end¥block§handler©finalizer¬TryStatementÍhÍ	½O®BlockStatementÍlÍ	#’[³VariableDeclarationÍ{Í®‘\²VariableDeclaratorÍÍ­NªIdentifierÍÍ‡¦resultZ¯AwaitExpressionÍŠÍ­Y®CallExpressionÍÍ­T°MemberExpressionÍÍ¤T°MemberExpressionÍÍŸU®ThisExpressionÍÍ”NªIdentifierÍ•ÍŸªdataObjectÂÂNªIdentifierÍ Í¤¤saveÂÂ‘V§LiteralÍ¥Í¬¥local§'local'Â¥constR³ExpressionStatementÍ¼Í	Y®CallExpressionÍ¼Í	T°MemberExpressionÍ¼ÍÇNªIdentifierÍ¼ÍÂ¦LoggerNªIdentifierÍÃÍÇ¤infoÂÂ’NªIdentifierÍÈÍË£TAG^¯TemplateLiteralÍÍÍ	’T°MemberExpressionÍéÍùNªIdentifierÍéÍï¦resultNªIdentifierÍğÍù©sessionIdÂÂT°MemberExpressionÍ	Í	NªIdentifierÍ	Í	¦resultNªIdentifierÍ	Í	§versionÂÂ“_¯TemplateElementÍÎÍç`¹Saved locally: sessionId=¹Saved locally: sessionId=Â_¯TemplateElementÍúÍ	`ª, version=ª, version=Â_¯TemplateElementÍ	Í	`  ÃÂÔrd•¤type¥start£end¥param¤body«CatchClauseÍ	-Í	½NªIdentifierÍ	4Í	7£errO®BlockStatementÍ	9Í	½’[³VariableDeclarationÍ	HÍ	Z‘\²VariableDeclaratorÍ	NÍ	YNªIdentifierÍ	NÍ	S¥errorNªIdentifierÍ	VÍ	Y£err¥constR³ExpressionStatementÍ	hÍ	²Y®CallExpressionÍ	hÍ	±T°MemberExpressionÍ	hÍ	tNªIdentifierÍ	hÍ	n¦LoggerNªIdentifierÍ	oÍ	t¥errorÂÂ’NªIdentifierÍ	uÍ	x£TAG^¯TemplateLiteralÍ	zÍ	°’T°MemberExpressionÍ	“Í	NªIdentifierÍ	“Í	˜¥errorNªIdentifierÍ	™Í	¤codeÂÂT°MemberExpressionÍ	¡Í	®NªIdentifierÍ	¡Í	¦¥errorNªIdentifierÍ	§Í	®§messageÂÂ“_¯TemplateElementÍ	{Í	‘`¶Failed to save local: ¶Failed to save local: Â_¯TemplateElementÍ	Í	Ÿ`¡ ¡ Â_¯TemplateElementÍ	¯Í	¯`  ÃÂÀP°MethodDefinitionÍ	íÍkÂÂNªIdentifierÍ	óÍ	ÿ¬leaveSession¦methodQ²FunctionExpressionÍ	ÿÍkÀÂÂÃO®BlockStatementÍ
+Ík’X«IfStatementÍ
+Í
+Db¯UnaryExpressionÍ
+Í
+!¡!ÃT°MemberExpressionÍ
+Í
+!U®ThisExpressionÍ
+Í
+NªIdentifierÍ
+Í
+!ªdataObjectÂÂO®BlockStatementÍ
+#Í
+D‘Z¯ReturnStatementÍ
+2Í
+9ÀÀc¬TryStatementÍ
+NÍdO®BlockStatementÍ
+RÍ
+Ç’R³ExpressionStatementÍ
+aÍ
+ˆZ¯AwaitExpressionÍ
+aÍ
+‡Y®CallExpressionÍ
+gÍ
+‡T°MemberExpressionÍ
+gÍ
+ƒT°MemberExpressionÍ
+gÍ
+vU®ThisExpressionÍ
+gÍ
+kNªIdentifierÍ
+lÍ
+vªdataObjectÂÂNªIdentifierÍ
+wÍ
+ƒ¬setSessionIdÂÂ‘V§LiteralÍ
+„Í
+† ¢''ÂR³ExpressionStatementÍ
+–Í
+¼Y®CallExpressionÍ
+–Í
+»T°MemberExpressionÍ
+–Í
+¡NªIdentifierÍ
+–Í
+œ¦LoggerNªIdentifierÍ
+Í
+¡¤infoÂÂ’NªIdentifierÍ
+¢Í
+¥£TAGV§LiteralÍ
+§Í
+º±Left all sessions³'Left all sessions'Âd«CatchClauseÍ
+ÑÍdNªIdentifierÍ
+ØÍ
+Û£errO®BlockStatementÍ
+İÍd’[³VariableDeclarationÍ
+ìÍ
+ş‘\²VariableDeclaratorÍ
+òÍ
+ıNªIdentifierÍ
+òÍ
+÷¥errorNªIdentifierÍ
+úÍ
+ı£err¥constR³ExpressionStatementÍÍYY®CallExpressionÍÍXT°MemberExpressionÍÍNªIdentifierÍÍ¦LoggerNªIdentifierÍÍ¥errorÂÂ’NªIdentifierÍÍ£TAG^¯TemplateLiteralÍÍW’T°MemberExpressionÍ:ÍDNªIdentifierÍ:Í?¥errorNªIdentifierÍ@ÍD¤codeÂÂT°MemberExpressionÍHÍUNªIdentifierÍHÍM¥errorNªIdentifierÍNÍU§messageÂÂ“_¯TemplateElementÍÍ8`¹Failed to leave session: ¹Failed to leave session: Â_¯TemplateElementÍEÍF`¡ ¡ Â_¯TemplateElementÍVÍV`  ÃÂÀP°MethodDefinitionÍ–ÍóÂÂNªIdentifierÍ–Í§destroy¦methodQ²FunctionExpressionÍÍóÀÂÂÂO®BlockStatementÍ Íó•X«IfStatementÍ«ÍIT°MemberExpressionÍ¯Í¾U®ThisExpressionÍ¯Í³NªIdentifierÍ´Í¾ªdataObjectÂÂO®BlockStatementÍÀÍI“R³ExpressionStatementÍÏÍíY®CallExpressionÍÏÍìT°MemberExpressionÍÏÍâT°MemberExpressionÍÏÍŞU®ThisExpressionÍÏÍÓNªIdentifierÍÔÍŞªdataObjectÂÂNªIdentifierÍßÍâ£offÂÂ‘V§LiteralÍãÍë¦change¨'change'ÂR³ExpressionStatementÍûÍY®CallExpressionÍûÍT°MemberExpressionÍûÍT°MemberExpressionÍûÍ
+U®ThisExpressionÍûÍÿNªIdentifierÍ Í
+ªdataObjectÂÂNªIdentifierÍÍ£offÂÂ‘V§LiteralÍÍ¦status¨'status'ÂR³ExpressionStatementÍ'Í>S´AssignmentExpressionÍ'Í=¡=T°MemberExpressionÍ'Í6U®ThisExpressionÍ'Í+NªIdentifierÍ,Í6ªdataObjectÂÂV§LiteralÍ9Í=À¤nullÀR³ExpressionStatementÍSÍmS´AssignmentExpressionÍSÍl¡=T°MemberExpressionÍSÍgU®ThisExpressionÍSÍWNªIdentifierÍXÍg¯changeListenersÂÂW¯ArrayExpressionÍjÍlR³ExpressionStatementÍwÍ‘S´AssignmentExpressionÍwÍ¡=T°MemberExpressionÍwÍ‹U®ThisExpressionÍwÍ{NªIdentifierÍ|Í‹¯statusListenersÂÂW¯ArrayExpressionÍÍR³ExpressionStatementÍ›Í¯S´AssignmentExpressionÍ›Í®¡=T°MemberExpressionÍ›Í©U®ThisExpressionÍ›ÍŸNªIdentifierÍ Í©©todoItemsÂÂW¯ArrayExpressionÍ¬Í®R³ExpressionStatementÍ¹ÍìY®CallExpressionÍ¹ÍëT°MemberExpressionÍ¹ÍÄNªIdentifierÍ¹Í¿¦LoggerNªIdentifierÍÀÍÄ¤infoÂÂ’NªIdentifierÍÅÍÈ£TAGV§LiteralÍÊÍê¾DistributedTodoModel destroyedÙ 'DistributedTodoModel destroyed'ÂP°MethodDefinitionÍ0ÍêÂÂNªIdentifierÍ0Í8¨getItems¦methodQ²FunctionExpressionÍ8ÍêÀÂÂÂO®BlockStatementÍ;Íê“[³VariableDeclarationÍFÍX‘\²VariableDeclaratorÍLÍWNªIdentifierÍLÍR¦resultW¯ArrayExpressionÍUÍW¥constÔre—¤type¥start£end¤init¤test¦update¤body¬ForStatementÍbÍË[³VariableDeclarationÍgÍp‘\²VariableDeclaratorÍkÍpNªIdentifierÍkÍl¡iV§LiteralÍoÍp ¡0£leta°BinaryExpressionÍrÍ‹NªIdentifierÍrÍs¡i¡<T°MemberExpressionÍvÍ‹T°MemberExpressionÍvÍ„U®ThisExpressionÍvÍzNªIdentifierÍ{Í„©todoItemsÂÂNªIdentifierÍ…Í‹¦lengthÂÂb°UpdateExpressionÍÍ¢++ÂNªIdentifierÍÍ¡iO®BlockStatementÍ’ÍË‘R³ExpressionStatementÍ¡ÍÀY®CallExpressionÍ¡Í¿T°MemberExpressionÍ¡Í¬NªIdentifierÍ¡Í§¦resultNªIdentifierÍ¨Í¬¤pushÂÂ‘T°MemberExpressionÍ­Í¾T°MemberExpressionÍ­Í»U®ThisExpressionÍ­Í±NªIdentifierÍ²Í»©todoItemsÂÂNªIdentifierÍ¼Í½¡iÃÂÂZ¯ReturnStatementÍÕÍãNªIdentifierÍÜÍâ¦resultP°MethodDefinitionÍğÍÙÂÂNªIdentifierÍğÍÿ¯getPendingCount¦methodQ²FunctionExpressionÍÿÍÙÀÂÂÂO®BlockStatementÍÍÙ“[³VariableDeclarationÍÍ‘\²VariableDeclaratorÍÍNªIdentifierÍÍ¥countV§LiteralÍÍ ¡0£lete¬ForStatementÍ%Í»[³VariableDeclarationÍ*Í3‘\²VariableDeclaratorÍ.Í3NªIdentifierÍ.Í/¡iV§LiteralÍ2Í3 ¡0£leta°BinaryExpressionÍ5ÍNNªIdentifierÍ5Í6¡i¡<T°MemberExpressionÍ9ÍNT°MemberExpressionÍ9ÍGU®ThisExpressionÍ9Í=NªIdentifierÍ>ÍG©todoItemsÂÂNªIdentifierÍHÍN¦lengthÂÂb°UpdateExpressionÍPÍS¢++ÂNªIdentifierÍPÍQ¡iO®BlockStatementÍUÍ»‘X«IfStatementÍdÍ°b¯UnaryExpressionÍhÍ„¡!ÃT°MemberExpressionÍiÍ„T°MemberExpressionÍiÍzT°MemberExpressionÍiÍwU®ThisExpressionÍiÍmNªIdentifierÍnÍw©todoItemsÂÂNªIdentifierÍxÍy¡iÃÂNªIdentifierÍ{Í„©completedÂÂO®BlockStatementÍ†Í°‘R³ExpressionStatementÍ™Í¡b°UpdateExpressionÍ™Í ¢++ÂNªIdentifierÍ™Í¥countÀZ¯ReturnStatementÍÅÍÒNªIdentifierÍÌÍÑ¥countP°MethodDefinitionÍßÍ­ÂÂNªIdentifierÍßÍæ§addItem¦methodQ²FunctionExpressionÍæÍ­ÀÂÂÂ‘NªIdentifierÍçÍì¥titleO®BlockStatementÍîÍ­˜[³VariableDeclarationÍùÍ‘\²VariableDeclaratorÍÿÍNªIdentifierÍÿÍ§trimmedY®CallExpressionÍ	ÍT°MemberExpressionÍ	ÍNªIdentifierÍ	Í¥titleNªIdentifierÍÍ¤trimÂÂÂ¥constX«IfStatementÍ Í[a°BinaryExpressionÍ$Í8T°MemberExpressionÍ$Í2NªIdentifierÍ$Í+§trimmedNªIdentifierÍ,Í2¦lengthÂÂ£===V§LiteralÍ7Í8 ¡0O®BlockStatementÍ:Í[‘Z¯ReturnStatementÍIÍPÀÀ[³VariableDeclarationÍeÍ‹‘\²VariableDeclaratorÍkÍŠNªIdentifierÍkÍr§newItem]­NewExpressionÍuÍŠNªIdentifierÍyÍ¨TodoItem‘NªIdentifierÍ‚Í‰§trimmed¥const[³VariableDeclarationÍ•Í¯‘\²VariableDeclaratorÍ›Í®NªIdentifierÍ›Í¢§newListW¯ArrayExpressionÍ¥Í®‘NªIdentifierÍ¦Í­§newItem¥conste¬ForStatementÍ¹Í#[³VariableDeclarationÍ¾ÍÇ‘\²VariableDeclaratorÍÂÍÇNªIdentifierÍÂÍÃ¡iV§LiteralÍÆÍÇ ¡0£leta°BinaryExpressionÍÉÍâNªIdentifierÍÉÍÊ¡i¡<T°MemberExpressionÍÍÍâT°MemberExpressionÍÍÍÛU®ThisExpressionÍÍÍÑNªIdentifierÍÒÍÛ©todoItemsÂÂNªIdentifierÍÜÍâ¦lengthÂÂb°UpdateExpressionÍäÍç¢++ÂNªIdentifierÍäÍå¡iO®BlockStatementÍéÍ#‘R³ExpressionStatementÍøÍY®CallExpressionÍøÍT°MemberExpressionÍøÍNªIdentifierÍøÍÿ§newListNªIdentifierÍ Í¤pushÂÂ‘T°MemberExpressionÍÍT°MemberExpressionÍÍU®ThisExpressionÍÍ	NªIdentifierÍ
+Í©todoItemsÂÂNªIdentifierÍÍ¡iÃÂÂR³ExpressionStatementÍ-ÍFS´AssignmentExpressionÍ-ÍE¡=T°MemberExpressionÍ-Í;U®ThisExpressionÍ-Í1NªIdentifierÍ2Í;©todoItemsÂÂNªIdentifierÍ>ÍE§newListR³ExpressionStatementÍPÍnY®CallExpressionÍPÍmT°MemberExpressionÍPÍkU®ThisExpressionÍPÍTNªIdentifierÍUÍk¶writeItemsToDataObjectÂÂÂR³ExpressionStatementÍxÍ¦Y®CallExpressionÍxÍ¥T°MemberExpressionÍxÍƒNªIdentifierÍxÍ~¦LoggerNªIdentifierÍÍƒ¤infoÂÂ’NªIdentifierÍ„Í‡£TAG^¯TemplateLiteralÍ‰Í¤‘T°MemberExpressionÍ˜Í¢NªIdentifierÍ˜ÍŸ§newItemNªIdentifierÍ Í¢¢idÂÂ’_¯TemplateElementÍŠÍ–`¬Added item: ¬Added item: Â_¯TemplateElementÍ£Í£`  ÃÂP°MethodDefinitionÍ³ÍÂÂNªIdentifierÍ³Í½ªtoggleItem¦methodQ²FunctionExpressionÍ½ÍÀÂÂÂ‘NªIdentifierÍ¾ÍÀ¢idO®BlockStatementÍÂÍš[³VariableDeclarationÍÍÍî‘\²VariableDeclaratorÍÓÍíNªIdentifierÍÓÍØ¥indexY®CallExpressionÍÛÍíT°MemberExpressionÍÛÍéU®ThisExpressionÍÛÍßNªIdentifierÍàÍé©findIndexÂÂ‘NªIdentifierÍêÍì¢idÂ¥constX«IfStatementÍøÍ+a°BinaryExpressionÍüÍNªIdentifierÍüÍ¥index£===b¯UnaryExpressionÍÍ¡-ÃV§LiteralÍÍ¡1O®BlockStatementÍ
+Í+‘Z¯ReturnStatementÍÍ ÀÀR³ExpressionStatementÍ5ÍxS´AssignmentExpressionÍ5Íw¡=T°MemberExpressionÍ5ÍTT°MemberExpressionÍ5ÍJT°MemberExpressionÍ5ÍCU®ThisExpressionÍ5Í9NªIdentifierÍ:ÍC©todoItemsÂÂNªIdentifierÍDÍI¥indexÃÂNªIdentifierÍKÍT©completedÂÂb¯UnaryExpressionÍWÍw¡!ÃT°MemberExpressionÍXÍwT°MemberExpressionÍXÍmT°MemberExpressionÍXÍfU®ThisExpressionÍXÍ\NªIdentifierÍ]Íf©todoItemsÂÂNªIdentifierÍgÍl¥indexÃÂNªIdentifierÍnÍw©completedÂÂR³ExpressionStatementÍ‚Í°S´AssignmentExpressionÍ‚Í¯¡=T°MemberExpressionÍ‚Í¢T°MemberExpressionÍ‚Í—T°MemberExpressionÍ‚ÍU®ThisExpressionÍ‚Í†NªIdentifierÍ‡Í©todoItemsÂÂNªIdentifierÍ‘Í–¥indexÃÂNªIdentifierÍ˜Í¢ªupdateTimeÂÂY®CallExpressionÍ¥Í¯T°MemberExpressionÍ¥Í­NªIdentifierÍ¥Í©¤DateNªIdentifierÍªÍ­£nowÂÂÂ[³VariableDeclarationÍºÍà‘\²VariableDeclaratorÍÀÍßNªIdentifierÍÀÍÇ§toggledT°MemberExpressionÍÊÍßT°MemberExpressionÍÊÍØU®ThisExpressionÍÊÍÎNªIdentifierÍÏÍØ©todoItemsÂÂNªIdentifierÍÙÍŞ¥indexÃÂ¥const[³VariableDeclarationÍêÍÿ‘\²VariableDeclaratorÍğÍşNªIdentifierÍğÍù©remainingW¯ArrayExpressionÍüÍş¥conste¬ForStatementÍ	Í¨[³VariableDeclarationÍÍ‘\²VariableDeclaratorÍÍNªIdentifierÍÍ¡iV§LiteralÍÍ ¡0£leta°BinaryExpressionÍÍ2NªIdentifierÍÍ¡i¡<T°MemberExpressionÍÍ2T°MemberExpressionÍÍ+U®ThisExpressionÍÍ!NªIdentifierÍ"Í+©todoItemsÂÂNªIdentifierÍ,Í2¦lengthÂÂb°UpdateExpressionÍ4Í7¢++ÂNªIdentifierÍ4Í5¡iO®BlockStatementÍ9Í¨‘X«IfStatementÍHÍa°BinaryExpressionÍLÍWNªIdentifierÍLÍM¡i£!==NªIdentifierÍRÍW¥indexO®BlockStatementÍYÍ‘R³ExpressionStatementÍlÍY®CallExpressionÍlÍT°MemberExpressionÍlÍzNªIdentifierÍlÍu©remainingNªIdentifierÍvÍz¤pushÂÂ‘T°MemberExpressionÍ{ÍŒT°MemberExpressionÍ{Í‰U®ThisExpressionÍ{ÍNªIdentifierÍ€Í‰©todoItemsÂÂNªIdentifierÍŠÍ‹¡iÃÂÂÀX«IfStatementÍ²ÍÀT°MemberExpressionÍ¶ÍÇNªIdentifierÍ¶Í½§toggledNªIdentifierÍ¾ÍÇ©completedÂÂO®BlockStatementÍÉÍû‘R³ExpressionStatementÍØÍğY®CallExpressionÍØÍïT°MemberExpressionÍØÍæNªIdentifierÍØÍá©remainingNªIdentifierÍâÍæ¤pushÂÂ‘NªIdentifierÍçÍî§toggledÂO®BlockStatementÍ
+ÍÀ’[³VariableDeclarationÍÍV‘\²VariableDeclaratorÍÍUNªIdentifierÍÍ0±firstCompletedIdxY®CallExpressionÍ3ÍUT°MemberExpressionÍ3ÍJU®ThisExpressionÍ3Í7NªIdentifierÍ8ÍJ²findFirstCompletedÂÂ‘NªIdentifierÍKÍT©remainingÂ¥constX«IfStatementÍdÍµa°BinaryExpressionÍhÍ€NªIdentifierÍhÍy±firstCompletedIdx£===b¯UnaryExpressionÍ~Í€¡-ÃV§LiteralÍÍ€¡1O®BlockStatementÍ‚Í¼‘R³ExpressionStatementÍ•Í­Y®CallExpressionÍ•Í¬T°MemberExpressionÍ•Í£NªIdentifierÍ•Í©remainingNªIdentifierÍŸÍ£¤pushÂÂ‘NªIdentifierÍ¤Í«§toggledÂO®BlockStatementÍÏÍµ—[³VariableDeclarationÍâÍõ‘\²VariableDeclaratorÍèÍôNªIdentifierÍèÍï§newListW¯ArrayExpressionÍòÍô¥conste¬ForStatementÍÍx[³VariableDeclarationÍÍ‘\²VariableDeclaratorÍÍNªIdentifierÍÍ¡iV§LiteralÍÍ ¡0£leta°BinaryExpressionÍÍ,NªIdentifierÍÍ¡i¡<NªIdentifierÍÍ,±firstCompletedIdxb°UpdateExpressionÍ.Í1¢++ÂNªIdentifierÍ.Í/¡iO®BlockStatementÍ3Íx‘R³ExpressionStatementÍJÍeY®CallExpressionÍJÍdT°MemberExpressionÍJÍVNªIdentifierÍJÍQ§newListNªIdentifierÍRÍV¤pushÂÂ‘T°MemberExpressionÍWÍcNªIdentifierÍWÍ`©remainingNªIdentifierÍaÍb¡iÃÂÂR³ExpressionStatementÍŠÍ Y®CallExpressionÍŠÍŸT°MemberExpressionÍŠÍ–NªIdentifierÍŠÍ‘§newListNªIdentifierÍ’Í–¤pushÂÂ‘NªIdentifierÍ—Í§toggledÂe¬ForStatementÍ²Í2[³VariableDeclarationÍ·ÍĞ‘\²VariableDeclaratorÍ»ÍĞNªIdentifierÍ»Í¼¡iNªIdentifierÍ¿ÍĞ±firstCompletedIdx£leta°BinaryExpressionÍÒÍæNªIdentifierÍÒÍÓ¡i¡<T°MemberExpressionÍÖÍæNªIdentifierÍÖÍß©remainingNªIdentifierÍàÍæ¦lengthÂÂb°UpdateExpressionÍèÍë¢++ÂNªIdentifierÍèÍé¡iO®BlockStatementÍíÍ2‘R³ExpressionStatementÍÍY®CallExpressionÍÍT°MemberExpressionÍÍNªIdentifierÍÍ§newListNªIdentifierÍÍ¤pushÂÂ‘T°MemberExpressionÍÍNªIdentifierÍÍ©remainingNªIdentifierÍÍ¡iÃÂÂR³ExpressionStatementÍDÍ]S´AssignmentExpressionÍDÍ\¡=T°MemberExpressionÍDÍRU®ThisExpressionÍDÍHNªIdentifierÍIÍR©todoItemsÂÂNªIdentifierÍUÍ\§newListR³ExpressionStatementÍoÍY®CallExpressionÍoÍŒT°MemberExpressionÍoÍŠU®ThisExpressionÍoÍsNªIdentifierÍtÍŠ¶writeItemsToDataObjectÂÂÂZ¯ReturnStatementÍŸÍ¦ÀR³ExpressionStatementÍÊÍåS´AssignmentExpressionÍÊÍä¡=T°MemberExpressionÍÊÍØU®ThisExpressionÍÊÍÎNªIdentifierÍÏÍØ©todoItemsÂÂNªIdentifierÍÛÍä©remainingR³ExpressionStatementÍïÍY®CallExpressionÍïÍT°MemberExpressionÍïÍ
+U®ThisExpressionÍïÍóNªIdentifierÍôÍ
+¶writeItemsToDataObjectÂÂÂP°MethodDefinitionÍÍíÂÂNªIdentifierÍÍ)¯updateItemTitle¦methodQ²FunctionExpressionÍ)ÍíÀÂÂÂ’NªIdentifierÍ*Í,¢idNªIdentifierÍ.Í6¨newTitleO®BlockStatementÍ8Íí“[³VariableDeclarationÍCÍc‘\²VariableDeclaratorÍIÍbNªIdentifierÍIÍP§trimmedY®CallExpressionÍSÍbT°MemberExpressionÍSÍ`NªIdentifierÍSÍ[¨newTitleNªIdentifierÍ\Í`¤trimÂÂÂ¥constX«IfStatementÍmÍ¨a°BinaryExpressionÍqÍ…T°MemberExpressionÍqÍNªIdentifierÍqÍx§trimmedNªIdentifierÍyÍ¦lengthÂÂ£===V§LiteralÍ„Í… ¡0O®BlockStatementÍ‡Í¨‘Z¯ReturnStatementÍ–ÍÀÀe¬ForStatementÍ²Íæ[³VariableDeclarationÍ·ÍÀ‘\²VariableDeclaratorÍ»ÍÀNªIdentifierÍ»Í¼¡iV§LiteralÍ¿ÍÀ ¡0£leta°BinaryExpressionÍÂÍÛNªIdentifierÍÂÍÃ¡i¡<T°MemberExpressionÍÆÍÛT°MemberExpressionÍÆÍÔU®ThisExpressionÍÆÍÊNªIdentifierÍËÍÔ©todoItemsÂÂNªIdentifierÍÕÍÛ¦lengthÂÂb°UpdateExpressionÍİÍà¢++ÂNªIdentifierÍİÍŞ¡iO®BlockStatementÍâÍæ‘X«IfStatementÍñÍÛa°BinaryExpressionÍõÍT°MemberExpressionÍõÍ	T°MemberExpressionÍõÍT°MemberExpressionÍõÍU®ThisExpressionÍõÍùNªIdentifierÍúÍ©todoItemsÂÂNªIdentifierÍÍ¡iÃÂNªIdentifierÍÍ	¢idÂÂ£===NªIdentifierÍÍ¢idO®BlockStatementÍÍÛ”R³ExpressionStatementÍ%ÍGS´AssignmentExpressionÍ%ÍF¡=T°MemberExpressionÍ%Í<T°MemberExpressionÍ%Í6T°MemberExpressionÍ%Í3U®ThisExpressionÍ%Í)NªIdentifierÍ*Í3©todoItemsÂÂNªIdentifierÍ4Í5¡iÃÂNªIdentifierÍ7Í<¥titleÂÂNªIdentifierÍ?ÍF§trimmedR³ExpressionStatementÍYÍƒS´AssignmentExpressionÍYÍ‚¡=T°MemberExpressionÍYÍuT°MemberExpressionÍYÍjT°MemberExpressionÍYÍgU®ThisExpressionÍYÍ]NªIdentifierÍ^Íg©todoItemsÂÂNªIdentifierÍhÍi¡iÃÂNªIdentifierÍkÍuªupdateTimeÂÂY®CallExpressionÍxÍ‚T°MemberExpressionÍxÍ€NªIdentifierÍxÍ|¤DateNªIdentifierÍ}Í€£nowÂÂÂR³ExpressionStatementÍ•Í³Y®CallExpressionÍ•Í²T°MemberExpressionÍ•Í°U®ThisExpressionÍ•Í™NªIdentifierÍšÍ°¶writeItemsToDataObjectÂÂÂZ¯ReturnStatementÍÅÍÌÀÀP°MethodDefinitionÍóÍ)ÂÂNªIdentifierÍóÍıªdeleteItem¦methodQ²FunctionExpressionÍıÍ)ÀÂÂÂ‘NªIdentifierÍşÍ ¢idO®BlockStatementÍÍ)”[³VariableDeclarationÍÍ ‘\²VariableDeclaratorÍÍNªIdentifierÍÍ§newListW¯ArrayExpressionÍÍ¥conste¬ForStatementÍ*Í×[³VariableDeclarationÍ/Í8‘\²VariableDeclaratorÍ3Í8NªIdentifierÍ3Í4¡iV§LiteralÍ7Í8 ¡0£leta°BinaryExpressionÍ:ÍSNªIdentifierÍ:Í;¡i¡<T°MemberExpressionÍ>ÍST°MemberExpressionÍ>ÍLU®ThisExpressionÍ>ÍBNªIdentifierÍCÍL©todoItemsÂÂNªIdentifierÍMÍS¦lengthÂÂb°UpdateExpressionÍUÍX¢++ÂNªIdentifierÍUÍV¡iO®BlockStatementÍZÍ×‘X«IfStatementÍiÍÌa°BinaryExpressionÍmÍˆT°MemberExpressionÍmÍT°MemberExpressionÍmÍ~T°MemberExpressionÍmÍ{U®ThisExpressionÍmÍqNªIdentifierÍrÍ{©todoItemsÂÂNªIdentifierÍ|Í}¡iÃÂNªIdentifierÍÍ¢idÂÂ£!==NªIdentifierÍ†Íˆ¢idO®BlockStatementÍŠÍÌ‘R³ExpressionStatementÍÍ½Y®CallExpressionÍÍ¼T°MemberExpressionÍÍ©NªIdentifierÍÍ¤§newListNªIdentifierÍ¥Í©¤pushÂÂ‘T°MemberExpressionÍªÍ»T°MemberExpressionÍªÍ¸U®ThisExpressionÍªÍ®NªIdentifierÍ¯Í¸©todoItemsÂÂNªIdentifierÍ¹Íº¡iÃÂÂÀR³ExpressionStatementÍáÍúS´AssignmentExpressionÍáÍù¡=T°MemberExpressionÍáÍïU®ThisExpressionÍáÍåNªIdentifierÍæÍï©todoItemsÂÂNªIdentifierÍòÍù§newListR³ExpressionStatementÍÍ"Y®CallExpressionÍÍ!T°MemberExpressionÍÍU®ThisExpressionÍÍNªIdentifierÍ	Í¶writeItemsToDataObjectÂÂÂP°MethodDefinitionÍ/ÍhÂÂNªIdentifierÍ/Í=®clearCompleted¦methodQ²FunctionExpressionÍ=ÍhÀÂÂÂO®BlockStatementÍ@Íh”[³VariableDeclarationÍKÍ^‘\²VariableDeclaratorÍQÍ]NªIdentifierÍQÍX§newListW¯ArrayExpressionÍ[Í]¥conste¬ForStatementÍhÍ[³VariableDeclarationÍmÍv‘\²VariableDeclaratorÍqÍvNªIdentifierÍqÍr¡iV§LiteralÍuÍv ¡0£leta°BinaryExpressionÍxÍ‘NªIdentifierÍxÍy¡i¡<T°MemberExpressionÍ|Í‘T°MemberExpressionÍ|ÍŠU®ThisExpressionÍ|Í€NªIdentifierÍÍŠ©todoItemsÂÂNªIdentifierÍ‹Í‘¦lengthÂÂb°UpdateExpressionÍ“Í–¢++ÂNªIdentifierÍ“Í”¡iO®BlockStatementÍ˜Í‘X«IfStatementÍ§Íb¯UnaryExpressionÍ«ÍÇ¡!ÃT°MemberExpressionÍ¬ÍÇT°MemberExpressionÍ¬Í½T°MemberExpressionÍ¬ÍºU®ThisExpressionÍ¬Í°NªIdentifierÍ±Íº©todoItemsÂÂNªIdentifierÍ»Í¼¡iÃÂNªIdentifierÍ¾ÍÇ©completedÂÂO®BlockStatementÍÉÍ‘R³ExpressionStatementÍÜÍüY®CallExpressionÍÜÍûT°MemberExpressionÍÜÍèNªIdentifierÍÜÍã§newListNªIdentifierÍäÍè¤pushÂÂ‘T°MemberExpressionÍéÍúT°MemberExpressionÍéÍ÷U®ThisExpressionÍéÍíNªIdentifierÍîÍ÷©todoItemsÂÂNªIdentifierÍøÍù¡iÃÂÂÀR³ExpressionStatementÍ Í9S´AssignmentExpressionÍ Í8¡=T°MemberExpressionÍ Í.U®ThisExpressionÍ Í$NªIdentifierÍ%Í.©todoItemsÂÂNªIdentifierÍ1Í8§newListR³ExpressionStatementÍCÍaY®CallExpressionÍCÍ`T°MemberExpressionÍCÍ^U®ThisExpressionÍCÍGNªIdentifierÍHÍ^¶writeItemsToDataObjectÂÂÂP°MethodDefinitionÍ¤ÍñÂÂNªIdentifierÍ¤Í°¬onDataChange¦methodQ²FunctionExpressionÍ°ÍñÀÂÂÂ‘NªIdentifierÍ±Í¹¨listenerO®BlockStatementÍ»Íñ‘R³ExpressionStatementÍÆÍêY®CallExpressionÍÆÍéT°MemberExpressionÍÆÍßT°MemberExpressionÍÆÍÚU®ThisExpressionÍÆÍÊNªIdentifierÍËÍÚ¯changeListenersÂÂNªIdentifierÍÛÍß¤pushÂÂ‘NªIdentifierÍàÍè¨listenerÂP°MethodDefinitionÍ÷Í,ÂÂNªIdentifierÍ÷Í­offDataChange¦methodQ²FunctionExpressionÍÍ,ÀÂÂÂ‘NªIdentifierÍÍ¨listenerO®BlockStatementÍÍ,“[³VariableDeclarationÍÍ.‘\²VariableDeclaratorÍ Í-NªIdentifierÍ Í(¨filteredW¯ArrayExpressionÍ+Í-¥conste¬ForStatementÍ8Íû[³VariableDeclarationÍ=ÍF‘\²VariableDeclaratorÍAÍFNªIdentifierÍAÍB¡iV§LiteralÍEÍF ¡0£leta°BinaryExpressionÍHÍgNªIdentifierÍHÍI¡i¡<T°MemberExpressionÍLÍgT°MemberExpressionÍLÍ`U®ThisExpressionÍLÍPNªIdentifierÍQÍ`¯changeListenersÂÂNªIdentifierÍaÍg¦lengthÂÂb°UpdateExpressionÍiÍl¢++ÂNªIdentifierÍiÍj¡iO®BlockStatementÍnÍû‘X«IfStatementÍ}Íğa°BinaryExpressionÍÍ¥T°MemberExpressionÍÍ˜T°MemberExpressionÍÍ•U®ThisExpressionÍÍ…NªIdentifierÍ†Í•¯changeListenersÂÂNªIdentifierÍ–Í—¡iÃÂ£!==NªIdentifierÍÍ¥¨listenerO®BlockStatementÍ§Íğ‘R³ExpressionStatementÍºÍáY®CallExpressionÍºÍàT°MemberExpressionÍºÍÇNªIdentifierÍºÍÂ¨filteredNªIdentifierÍÃÍÇ¤pushÂÂ‘T°MemberExpressionÍÈÍßT°MemberExpressionÍÈÍÜU®ThisExpressionÍÈÍÌNªIdentifierÍÍÍÜ¯changeListenersÂÂNªIdentifierÍİÍŞ¡iÃÂÂÀR³ExpressionStatementÍÍ%S´AssignmentExpressionÍÍ$¡=T°MemberExpressionÍÍU®ThisExpressionÍÍ	NªIdentifierÍ
+Í¯changeListenersÂÂNªIdentifierÍÍ$¨filteredP°MethodDefinitionÍ2ÍÂÂNªIdentifierÍ2Í@®onStatusChange¦methodQ²FunctionExpressionÍ@ÍÀÂÂÂ‘NªIdentifierÍAÍI¨listenerO®BlockStatementÍKÍ‘R³ExpressionStatementÍVÍzY®CallExpressionÍVÍyT°MemberExpressionÍVÍoT°MemberExpressionÍVÍjU®ThisExpressionÍVÍZNªIdentifierÍ[Íj¯statusListenersÂÂNªIdentifierÍkÍo¤pushÂÂ‘NªIdentifierÍpÍx¨listenerÂP°MethodDefinitionÍ‡Í¾ÂÂNªIdentifierÍ‡Í–¯offStatusChange¦methodQ²FunctionExpressionÍ–Í¾ÀÂÂÂ‘NªIdentifierÍ—ÍŸ¨listenerO®BlockStatementÍ¡Í¾“[³VariableDeclarationÍ¬ÍÀ‘\²VariableDeclaratorÍ²Í¿NªIdentifierÍ²Íº¨filteredW¯ArrayExpressionÍ½Í¿¥conste¬ForStatementÍÊÍ[³VariableDeclarationÍÏÍØ‘\²VariableDeclaratorÍÓÍØNªIdentifierÍÓÍÔ¡iV§LiteralÍ×ÍØ ¡0£leta°BinaryExpressionÍÚÍùNªIdentifierÍÚÍÛ¡i¡<T°MemberExpressionÍŞÍùT°MemberExpressionÍŞÍòU®ThisExpressionÍŞÍâNªIdentifierÍãÍò¯statusListenersÂÂNªIdentifierÍóÍù¦lengthÂÂb°UpdateExpressionÍûÍş¢++ÂNªIdentifierÍûÍü¡iO®BlockStatementÍ Í‘X«IfStatementÍÍ‚a°BinaryExpressionÍÍ7T°MemberExpressionÍÍ*T°MemberExpressionÍÍ'U®ThisExpressionÍÍNªIdentifierÍÍ'¯statusListenersÂÂNªIdentifierÍ(Í)¡iÃÂ£!==NªIdentifierÍ/Í7¨listenerO®BlockStatementÍ9Í‚‘R³ExpressionStatementÍLÍsY®CallExpressionÍLÍrT°MemberExpressionÍLÍYNªIdentifierÍLÍT¨filteredNªIdentifierÍUÍY¤pushÂÂ‘T°MemberExpressionÍZÍqT°MemberExpressionÍZÍnU®ThisExpressionÍZÍ^NªIdentifierÍ_Ín¯statusListenersÂÂNªIdentifierÍoÍp¡iÃÂÂÀR³ExpressionStatementÍ—Í·S´AssignmentExpressionÍ—Í¶¡=T°MemberExpressionÍ—Í«U®ThisExpressionÍ—Í›NªIdentifierÍœÍ«¯statusListenersÂÂNªIdentifierÍ®Í¶¨filteredP°MethodDefinitionÍÄÍÍÂÂNªIdentifierÍÄÍÔ°getOnlineDevices¦methodQ²FunctionExpressionÍÔÍÍÀÂÂÂO®BlockStatementÍ×ÍÍ“[³VariableDeclarationÍâÍô‘\²VariableDeclaratorÍèÍóNªIdentifierÍèÍî¦resultW¯ArrayExpressionÍñÍó¥conste¬ForStatementÍşÍ®[³VariableDeclarationÍÍ‘\²VariableDeclaratorÍÍNªIdentifierÍÍ¡iV§LiteralÍÍ ¡0£leta°BinaryExpressionÍÍ+NªIdentifierÍÍ¡i¡<T°MemberExpressionÍÍ+T°MemberExpressionÍÍ$U®ThisExpressionÍÍNªIdentifierÍÍ$­onlineDevicesÂÂNªIdentifierÍ%Í+¦lengthÂÂb°UpdateExpressionÍ-Í0¢++ÂNªIdentifierÍ-Í.¡iO®BlockStatementÍ2Í®‘R³ExpressionStatementÍAÍ£Y®CallExpressionÍAÍ¢T°MemberExpressionÍAÍLNªIdentifierÍAÍG¦resultNªIdentifierÍHÍL¤pushÂÂ‘Ôrf”¤type¥start£endªproperties°ObjectExpressionÍMÍ¡’Ôrg™¤type¥start£end¦method©shorthand¨computed£key¥value¤kind¨PropertyÍOÍyÂÂÂNªIdentifierÍOÍX©networkIdT°MemberExpressionÍZÍyT°MemberExpressionÍZÍoT°MemberExpressionÍZÍlU®ThisExpressionÍZÍ^NªIdentifierÍ_Íl­onlineDevicesÂÂNªIdentifierÍmÍn¡iÃÂNªIdentifierÍpÍy©networkIdÂÂ¤initg¨PropertyÍ{ÍŸÂÂÂNªIdentifierÍ{Í¦statusT°MemberExpressionÍƒÍŸT°MemberExpressionÍƒÍ˜T°MemberExpressionÍƒÍ•U®ThisExpressionÍƒÍ‡NªIdentifierÍˆÍ•­onlineDevicesÂÂNªIdentifierÍ–Í—¡iÃÂNªIdentifierÍ™ÍŸ¦statusÂÂ¤initÂZ¯ReturnStatementÍ¸ÍÆNªIdentifierÍ¿ÍÅ¦resultP°MethodDefinitionÍÓÍÂÂNªIdentifierÍÓÍß¬getSessionId¦methodQ²FunctionExpressionÍßÍÀÂÂÂO®BlockStatementÍâÍ“X«IfStatementÍíÍ'b¯UnaryExpressionÍñÍ¡!ÃT°MemberExpressionÍòÍU®ThisExpressionÍòÍöNªIdentifierÍ÷ÍªdataObjectÂÂO®BlockStatementÍÍ'‘Z¯ReturnStatementÍÍV§LiteralÍÍ ¢''À[³VariableDeclarationÍ1ÍZ‘\²VariableDeclaratorÍ7ÍYNªIdentifierÍ7Í:£sidT°MemberExpressionÍ=ÍYT°MemberExpressionÍ=ÍLU®ThisExpressionÍ=ÍANªIdentifierÍBÍLªdataObjectÂÂV§LiteralÍMÍX©sessionId«'sessionId'ÃÂ¥constZ¯ReturnStatementÍdÍˆXµConditionalExpressionÍkÍ‡a°BinaryExpressionÍkÍ|NªIdentifierÍkÍn£sid£!==NªIdentifierÍsÍ|©undefinedNªIdentifierÍÍ‚£sidV§LiteralÍ…Í‡ ¢''P°MethodDefinitionÍÌÍ!2ÂÂNªIdentifierÍÌÍâ¶writeItemsToDataObject¦methodQ²FunctionExpressionÍâÍ!2ÀÂÂÂO®BlockStatementÍåÍ!2•X«IfStatementÍğÍ 'b¯UnaryExpressionÍôÍ ¡!ÃT°MemberExpressionÍõÍ U®ThisExpressionÍõÍùNªIdentifierÍúÍ ªdataObjectÂÂO®BlockStatementÍ Í '‘Z¯ReturnStatementÍ Í ÀÀR³ExpressionStatementÍ 1Í oS´AssignmentExpressionÍ 1Í n¡=T°MemberExpressionÍ 1Í MT°MemberExpressionÍ 1Í @U®ThisExpressionÍ 1Í 5NªIdentifierÍ 6Í @ªdataObjectÂÂV§LiteralÍ AÍ L©itemsJson«'itemsJson'ÃÂY®CallExpressionÍ PÍ nT°MemberExpressionÍ PÍ ^NªIdentifierÍ PÍ T¤JSONNªIdentifierÍ UÍ ^©stringifyÂÂ‘T°MemberExpressionÍ _Í mU®ThisExpressionÍ _Í cNªIdentifierÍ dÍ m©todoItemsÂÂÂ[³VariableDeclarationÍ yÍ «‘\²VariableDeclaratorÍ Í ªNªIdentifierÍ Í ®currentVersionT°MemberExpressionÍ Í ªT°MemberExpressionÍ Í ŸU®ThisExpressionÍ Í ”NªIdentifierÍ •Í ŸªdataObjectÂÂV§LiteralÍ  Í ©§version©'version'ÃÂ¥constR³ExpressionStatementÍ µÍ!
+S´AssignmentExpressionÍ µÍ!	¡=T°MemberExpressionÍ µÍ ÏT°MemberExpressionÍ µÍ ÄU®ThisExpressionÍ µÍ ¹NªIdentifierÍ ºÍ ÄªdataObjectÂÂV§LiteralÍ ÅÍ Î§version©'version'ÃÂa°BinaryExpressionÍ ÒÍ!	XµConditionalExpressionÍ ÓÍ!a°BinaryExpressionÍ ÓÍ ïNªIdentifierÍ ÓÍ á®currentVersion£!==NªIdentifierÍ æÍ ï©undefinedNªIdentifierÍ òÍ! ®currentVersionV§LiteralÍ!Í! ¡0¡+V§LiteralÍ!Í!	¡1R³ExpressionStatementÍ!Í!+Y®CallExpressionÍ!Í!*T°MemberExpressionÍ!Í!(U®ThisExpressionÍ!Í!NªIdentifierÍ!Í!(¯notifyListenersÂÂÂP°MethodDefinitionÍ!8Í#5ÂÂNªIdentifierÍ!8Í!J²loadFromDataObject¦methodQ²FunctionExpressionÍ!JÍ#5ÀÂÂÂO®BlockStatementÍ!MÍ#5“X«IfStatementÍ!XÍ!b¯UnaryExpressionÍ!\Í!l¡!ÃT°MemberExpressionÍ!]Í!lU®ThisExpressionÍ!]Í!aNªIdentifierÍ!bÍ!lªdataObjectÂÂO®BlockStatementÍ!nÍ!‘Z¯ReturnStatementÍ!}Í!„ÀÀ[³VariableDeclarationÍ!™Í!È‘\²VariableDeclaratorÍ!ŸÍ!ÇNªIdentifierÍ!ŸÍ!¨©itemsJsonT°MemberExpressionÍ!«Í!ÇT°MemberExpressionÍ!«Í!ºU®ThisExpressionÍ!«Í!¯NªIdentifierÍ!°Í!ºªdataObjectÂÂV§LiteralÍ!»Í!Æ©itemsJson«'itemsJson'ÃÂ¥constX«IfStatementÍ!ÒÍ#.a±LogicalExpressionÍ!ÖÍ"a°BinaryExpressionÍ!ÖÍ!íNªIdentifierÍ!ÖÍ!ß©itemsJson£!==NªIdentifierÍ!äÍ!í©undefined¢&&a°BinaryExpressionÍ!ñÍ"T°MemberExpressionÍ!ñÍ"NªIdentifierÍ!ñÍ!ú©itemsJsonNªIdentifierÍ!ûÍ"¦lengthÂÂ¡>V§LiteralÍ"Í" ¡0O®BlockStatementÍ"Í#.‘c¬TryStatementÍ"Í##O®BlockStatementÍ"Í"´“[³VariableDeclarationÍ"-Í"R‘\²VariableDeclaratorÍ"3Í"QNªIdentifierÍ"3Í"9¦parsedY®CallExpressionÍ"<Í"QT°MemberExpressionÍ"<Í"FNªIdentifierÍ"<Í"@¤JSONNªIdentifierÍ"AÍ"F¥parseÂÂ‘NªIdentifierÍ"GÍ"P©itemsJsonÂ¥constR³ExpressionStatementÍ"dÍ"|S´AssignmentExpressionÍ"dÍ"{¡=T°MemberExpressionÍ"dÍ"rU®ThisExpressionÍ"dÍ"hNªIdentifierÍ"iÍ"r©todoItemsÂÂNªIdentifierÍ"uÍ"{¦parsedR³ExpressionStatementÍ"Í"¥Y®CallExpressionÍ"Í"¤T°MemberExpressionÍ"Í"¢U®ThisExpressionÍ"Í"’NªIdentifierÍ"“Í"¢¯notifyListenersÂÂÂd«CatchClauseÍ"ÂÍ##NªIdentifierÍ"ÉÍ"Ê¡eO®BlockStatementÍ"ÌÍ##‘R³ExpressionStatementÍ"ßÍ#Y®CallExpressionÍ"ßÍ#T°MemberExpressionÍ"ßÍ"ëNªIdentifierÍ"ßÍ"å¦LoggerNªIdentifierÍ"æÍ"ë¥errorÂÂ’NªIdentifierÍ"ìÍ"ï£TAG^¯TemplateLiteralÍ"ñÍ#‘NªIdentifierÍ#Í#¡e’_¯TemplateElementÍ"òÍ#`»Failed to parse itemsJson: »Failed to parse itemsJson: Â_¯TemplateElementÍ#Í#`  ÃÂÀÀP°MethodDefinitionÍ#;Í#zÂÂNªIdentifierÍ#;Í#K°handleDataChange¦methodQ²FunctionExpressionÍ#KÍ#zÀÂÂÂO®BlockStatementÍ#NÍ#z‘R³ExpressionStatementÍ#YÍ#sY®CallExpressionÍ#YÍ#rT°MemberExpressionÍ#YÍ#pU®ThisExpressionÍ#YÍ#]NªIdentifierÍ#^Í#p²loadFromDataObjectÂÂÂP°MethodDefinitionÍ#€Í(.ÂÂNªIdentifierÍ#€Í#’²handleStatusChange¦methodQ²FunctionExpressionÍ#’Í(.ÀÂÂÂ’NªIdentifierÍ#“Í#œ©networkIdNªIdentifierÍ#Í#¤¦statusO®BlockStatementÍ#¦Í(.’X«IfStatementÍ#±Í'¢a°BinaryExpressionÍ#µÍ#ÈNªIdentifierÍ#µÍ#»¦status£===V§LiteralÍ#ÀÍ#È¦online¨'online'O®BlockStatementÍ#ÊÍ%š“[³VariableDeclarationÍ#ÙÍ#ë‘\²VariableDeclaratorÍ#İÍ#êNªIdentifierÍ#İÍ#â¥foundV§LiteralÍ#åÍ#êÂ¥false£lete¬ForStatementÍ#ùÍ%[³VariableDeclarationÍ#şÍ$‘\²VariableDeclaratorÍ$Í$NªIdentifierÍ$Í$¡iV§LiteralÍ$Í$ ¡0£leta°BinaryExpressionÍ$	Í$&NªIdentifierÍ$	Í$
+¡i¡<T°MemberExpressionÍ$Í$&T°MemberExpressionÍ$Í$U®ThisExpressionÍ$Í$NªIdentifierÍ$Í$­onlineDevicesÂÂNªIdentifierÍ$ Í$&¦lengthÂÂb°UpdateExpressionÍ$(Í$+¢++ÂNªIdentifierÍ$(Í$)¡iO®BlockStatementÍ$-Í%‘X«IfStatementÍ$@Í%a°BinaryExpressionÍ$DÍ$qT°MemberExpressionÍ$DÍ$cT°MemberExpressionÍ$DÍ$YT°MemberExpressionÍ$DÍ$VU®ThisExpressionÍ$DÍ$HNªIdentifierÍ$IÍ$V­onlineDevicesÂÂNªIdentifierÍ$WÍ$X¡iÃÂNªIdentifierÍ$ZÍ$c©networkIdÂÂ£===NªIdentifierÍ$hÍ$q©networkIdO®BlockStatementÍ$sÍ%“R³ExpressionStatementÍ$ŠÍ$°S´AssignmentExpressionÍ$ŠÍ$¯¡=T°MemberExpressionÍ$ŠÍ$¦T°MemberExpressionÍ$ŠÍ$ŸT°MemberExpressionÍ$ŠÍ$œU®ThisExpressionÍ$ŠÍ$NªIdentifierÍ$Í$œ­onlineDevicesÂÂNªIdentifierÍ$Í$¡iÃÂNªIdentifierÍ$ Í$¦¦statusÂÂNªIdentifierÍ$©Í$¯¦statusR³ExpressionStatementÍ$ÆÍ$ÓS´AssignmentExpressionÍ$ÆÍ$Ò¡=NªIdentifierÍ$ÆÍ$Ë¥foundV§LiteralÍ$ÎÍ$ÒÃ¤trueÔrh”¤type¥start£end¥label®BreakStatementÍ$éÍ$ïÀÀX«IfStatementÍ%Í%b¯UnaryExpressionÍ%#Í%)¡!ÃNªIdentifierÍ%$Í%)¥foundO®BlockStatementÍ%+Í%‘R³ExpressionStatementÍ%>Í%€Y®CallExpressionÍ%>Í%T°MemberExpressionÍ%>Í%UT°MemberExpressionÍ%>Í%PU®ThisExpressionÍ%>Í%BNªIdentifierÍ%CÍ%P­onlineDevicesÂÂNªIdentifierÍ%QÍ%U¤pushÂÂ‘f°ObjectExpressionÍ%VÍ%~’g¨PropertyÍ%XÍ%lÂÂÂNªIdentifierÍ%XÍ%a©networkIdNªIdentifierÍ%cÍ%l©networkId¤initg¨PropertyÍ%nÍ%|ÂÂÂNªIdentifierÍ%nÍ%t¦statusNªIdentifierÍ%vÍ%|¦status¤initÂÀX«IfStatementÍ%©Í'¢a°BinaryExpressionÍ%­Í%ÁNªIdentifierÍ%­Í%³¦status£===V§LiteralÍ%¸Í%Á§offline©'offline'O®BlockStatementÍ%ÃÍ'“[³VariableDeclarationÍ%ÒÍ%æ‘\²VariableDeclaratorÍ%ØÍ%åNªIdentifierÍ%ØÍ%à¨filteredW¯ArrayExpressionÍ%ãÍ%å¥conste¬ForStatementÍ%ôÍ&Ì[³VariableDeclarationÍ%ùÍ&‘\²VariableDeclaratorÍ%ıÍ&NªIdentifierÍ%ıÍ%ş¡iV§LiteralÍ&Í& ¡0£leta°BinaryExpressionÍ&Í&!NªIdentifierÍ&Í&¡i¡<T°MemberExpressionÍ&Í&!T°MemberExpressionÍ&Í&U®ThisExpressionÍ&Í&NªIdentifierÍ&Í&­onlineDevicesÂÂNªIdentifierÍ&Í&!¦lengthÂÂb°UpdateExpressionÍ&#Í&&¢++ÂNªIdentifierÍ&#Í&$¡iO®BlockStatementÍ&(Í&Ì‘X«IfStatementÍ&;Í&½a°BinaryExpressionÍ&?Í&lT°MemberExpressionÍ&?Í&^T°MemberExpressionÍ&?Í&TT°MemberExpressionÍ&?Í&QU®ThisExpressionÍ&?Í&CNªIdentifierÍ&DÍ&Q­onlineDevicesÂÂNªIdentifierÍ&RÍ&S¡iÃÂNªIdentifierÍ&UÍ&^©networkIdÂÂ£!==NªIdentifierÍ&cÍ&l©networkIdO®BlockStatementÍ&nÍ&½‘R³ExpressionStatementÍ&…Í&ªY®CallExpressionÍ&…Í&©T°MemberExpressionÍ&…Í&’NªIdentifierÍ&…Í&¨filteredNªIdentifierÍ&Í&’¤pushÂÂ‘T°MemberExpressionÍ&“Í&¨T°MemberExpressionÍ&“Í&¥U®ThisExpressionÍ&“Í&—NªIdentifierÍ&˜Í&¥­onlineDevicesÂÂNªIdentifierÍ&¦Í&§¡iÃÂÂÀR³ExpressionStatementÍ&ÚÍ&øS´AssignmentExpressionÍ&ÚÍ&÷¡=T°MemberExpressionÍ&ÚÍ&ìU®ThisExpressionÍ&ÚÍ&ŞNªIdentifierÍ&ßÍ&ì­onlineDevicesÂÂNªIdentifierÍ&ïÍ&÷¨filteredX«IfStatementÍ'Í'¢a°BinaryExpressionÍ'Í'+NªIdentifierÍ'Í'¦status£===V§LiteralÍ'!Í'+¨restoredª'restored'O®BlockStatementÍ'-Í'¢’R³ExpressionStatementÍ'<Í'oY®CallExpressionÍ'<Í'nT°MemberExpressionÍ'<Í'GNªIdentifierÍ'<Í'B¦LoggerNªIdentifierÍ'CÍ'G¤infoÂÂ’NªIdentifierÍ'HÍ'K£TAGV§LiteralÍ'MÍ'm¾Data restored from persistenceÙ 'Data restored from persistence'ÂR³ExpressionStatementÍ'}Í'—Y®CallExpressionÍ'}Í'–T°MemberExpressionÍ'}Í'”U®ThisExpressionÍ'}Í'NªIdentifierÍ'‚Í'”²loadFromDataObjectÂÂÂÀe¬ForStatementÍ'¬Í('[³VariableDeclarationÍ'±Í'º‘\²VariableDeclaratorÍ'µÍ'ºNªIdentifierÍ'µÍ'¶¡iV§LiteralÍ'¹Í'º ¡0£leta°BinaryExpressionÍ'¼Í'ÛNªIdentifierÍ'¼Í'½¡i¡<T°MemberExpressionÍ'ÀÍ'ÛT°MemberExpressionÍ'ÀÍ'ÔU®ThisExpressionÍ'ÀÍ'ÄNªIdentifierÍ'ÅÍ'Ô¯statusListenersÂÂNªIdentifierÍ'ÕÍ'Û¦lengthÂÂb°UpdateExpressionÍ'İÍ'à¢++ÂNªIdentifierÍ'İÍ'Ş¡iO®BlockStatementÍ'âÍ('‘R³ExpressionStatementÍ'ñÍ(Y®CallExpressionÍ'ñÍ(T°MemberExpressionÍ'ñÍ(T°MemberExpressionÍ'ñÍ(U®ThisExpressionÍ'ñÍ'õNªIdentifierÍ'öÍ(¯statusListenersÂÂNªIdentifierÍ(Í(¡iÃÂ’NªIdentifierÍ(	Í(©networkIdNªIdentifierÍ(Í(¦statusÂP°MethodDefinitionÍ(4Í)TÂÂNªIdentifierÍ(4Í(C¯notifyListeners¦methodQ²FunctionExpressionÍ(CÍ)TÀÂÂÂO®BlockStatementÍ(FÍ)T“[³VariableDeclarationÍ(QÍ(b‘\²VariableDeclaratorÍ(WÍ(aNªIdentifierÍ(WÍ(\¥itemsW¯ArrayExpressionÍ(_Í(a¥conste¬ForStatementÍ(lÍ(Ô[³VariableDeclarationÍ(qÍ(z‘\²VariableDeclaratorÍ(uÍ(zNªIdentifierÍ(uÍ(v¡iV§LiteralÍ(yÍ(z ¡0£leta°BinaryExpressionÍ(|Í(•NªIdentifierÍ(|Í(}¡i¡<T°MemberExpressionÍ(€Í(•T°MemberExpressionÍ(€Í(U®ThisExpressionÍ(€Í(„NªIdentifierÍ(…Í(©todoItemsÂÂNªIdentifierÍ(Í(•¦lengthÂÂb°UpdateExpressionÍ(—Í(š¢++ÂNªIdentifierÍ(—Í(˜¡iO®BlockStatementÍ(œÍ(Ô‘R³ExpressionStatementÍ(«Í(ÉY®CallExpressionÍ(«Í(ÈT°MemberExpressionÍ(«Í(µNªIdentifierÍ(«Í(°¥itemsNªIdentifierÍ(±Í(µ¤pushÂÂ‘T°MemberExpressionÍ(¶Í(ÇT°MemberExpressionÍ(¶Í(ÄU®ThisExpressionÍ(¶Í(ºNªIdentifierÍ(»Í(Ä©todoItemsÂÂNªIdentifierÍ(ÅÍ(Æ¡iÃÂÂe¬ForStatementÍ(ŞÍ)M[³VariableDeclarationÍ(ãÍ(ì‘\²VariableDeclaratorÍ(çÍ(ìNªIdentifierÍ(çÍ(è¡iV§LiteralÍ(ëÍ(ì ¡0£leta°BinaryExpressionÍ(îÍ)NªIdentifierÍ(îÍ(ï¡i¡<T°MemberExpressionÍ(òÍ)T°MemberExpressionÍ(òÍ)U®ThisExpressionÍ(òÍ(öNªIdentifierÍ(÷Í)¯changeListenersÂÂNªIdentifierÍ)Í)¦lengthÂÂb°UpdateExpressionÍ)Í)¢++ÂNªIdentifierÍ)Í)¡iO®BlockStatementÍ)Í)M‘R³ExpressionStatementÍ)#Í)BY®CallExpressionÍ)#Í)AT°MemberExpressionÍ)#Í):T°MemberExpressionÍ)#Í)7U®ThisExpressionÍ)#Í)'NªIdentifierÍ)(Í)7¯changeListenersÂÂNªIdentifierÍ)8Í)9¡iÃÂ‘NªIdentifierÍ);Í)@¥itemsÂP°MethodDefinitionÍ)ZÍ*$ÂÂNªIdentifierÍ)ZÍ)c©findIndex¦methodQ²FunctionExpressionÍ)cÍ*$ÀÂÂÂ‘NªIdentifierÍ)dÍ)f¢idO®BlockStatementÍ)hÍ*$’e¬ForStatementÍ)sÍ*	[³VariableDeclarationÍ)xÍ)‘\²VariableDeclaratorÍ)|Í)NªIdentifierÍ)|Í)}¡iV§LiteralÍ)€Í) ¡0£leta°BinaryExpressionÍ)ƒÍ)œNªIdentifierÍ)ƒÍ)„¡i¡<T°MemberExpressionÍ)‡Í)œT°MemberExpressionÍ)‡Í)•U®ThisExpressionÍ)‡Í)‹NªIdentifierÍ)ŒÍ)•©todoItemsÂÂNªIdentifierÍ)–Í)œ¦lengthÂÂb°UpdateExpressionÍ)Í)¡¢++ÂNªIdentifierÍ)Í)Ÿ¡iO®BlockStatementÍ)£Í*	‘X«IfStatementÍ)²Í)şa°BinaryExpressionÍ)¶Í)ÑT°MemberExpressionÍ)¶Í)ÊT°MemberExpressionÍ)¶Í)ÇT°MemberExpressionÍ)¶Í)ÄU®ThisExpressionÍ)¶Í)ºNªIdentifierÍ)»Í)Ä©todoItemsÂÂNªIdentifierÍ)ÅÍ)Æ¡iÃÂNªIdentifierÍ)ÈÍ)Ê¢idÂÂ£===NªIdentifierÍ)ÏÍ)Ñ¢idO®BlockStatementÍ)ÓÍ)ş‘Z¯ReturnStatementÍ)æÍ)ïNªIdentifierÍ)íÍ)î¡iÀZ¯ReturnStatementÍ*Í*b¯UnaryExpressionÍ*Í*¡-ÃV§LiteralÍ*Í*¡1P°MethodDefinitionÍ**Í*ëÂÂNªIdentifierÍ**Í*<²findFirstCompleted¦methodQ²FunctionExpressionÍ*<Í*ëÀÂÂÂ‘NªIdentifierÍ*=Í*A¤listO®BlockStatementÍ*CÍ*ë’e¬ForStatementÍ*NÍ*Ğ[³VariableDeclarationÍ*SÍ*\‘\²VariableDeclaratorÍ*WÍ*\NªIdentifierÍ*WÍ*X¡iV§LiteralÍ*[Í*\ ¡0£leta°BinaryExpressionÍ*^Í*mNªIdentifierÍ*^Í*_¡i¡<T°MemberExpressionÍ*bÍ*mNªIdentifierÍ*bÍ*f¤listNªIdentifierÍ*gÍ*m¦lengthÂÂb°UpdateExpressionÍ*oÍ*r¢++ÂNªIdentifierÍ*oÍ*p¡iO®BlockStatementÍ*tÍ*Ğ‘X«IfStatementÍ*ƒÍ*ÅT°MemberExpressionÍ*‡Í*˜T°MemberExpressionÍ*‡Í*NªIdentifierÍ*‡Í*‹¤listNªIdentifierÍ*ŒÍ*¡iÃÂNªIdentifierÍ*Í*˜©completedÂÂO®BlockStatementÍ*šÍ*Å‘Z¯ReturnStatementÍ*­Í*¶NªIdentifierÍ*´Í*µ¡iÀZ¯ReturnStatementÍ*ÚÍ*äb¯UnaryExpressionÍ*áÍ*ã¡-ÃV§LiteralÍ*âÍ*ã¡1À“Ôri•¤type¥start£endªspecifiers¦source±ImportDeclaration ÌE‘Ôrj”¤type¥start£end¥local¶ImportDefaultSpecifierNªIdentifierµdistributedDataObjectV§Literal"ÌDÙ @ohos.data.distributedDataObjectÙ""@ohos.data.distributedDataObject"i±ImportDeclarationÌGÌr‘j¶ImportDefaultSpecifierÌNÌTNªIdentifierÌNÌT¦LoggerV§LiteralÌZÌqµ../common/util/Logger·'../common/util/Logger'i±ImportDeclarationÌtÌª’Ôrk•¤type¥start£end¨imported¥local¯ImportSpecifierÌ}Ì…NªIdentifierÌ}Ì…¨TodoItemNªIdentifierÌ}Ì…¨TodoItemk¯ImportSpecifierÌ‡Ì•NªIdentifierÌ‡Ì•®TodoDataSourceNªIdentifierÌ‡Ì•®TodoDataSourceV§LiteralÌÌ©ª./TodoItem¬'./TodoItem'

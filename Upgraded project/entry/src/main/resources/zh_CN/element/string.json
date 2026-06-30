@@ -1,0 +1,52 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "模块描述"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "描述"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "简易计算器"
+    },
+    {
+      "name": "error",
+      "value": "错误"
+    },
+    {
+      "name": "distributed_permission",
+      "value": "用于跨设备数据同步"
+    },
+    {
+      "name": "feature_menu",
+      "value": "功能菜单"
+    },
+    {
+      "name": "unit_conversion",
+      "value": "单位换算"
+    },
+    {
+      "name": "currency_conversion",
+      "value": "汇率换算"
+    },
+    {
+      "name": "date_calc",
+      "value": "日期计算"
+    },
+    {
+      "name": "bmi_calc",
+      "value": "BMI计算"
+    },
+    {
+      "name": "tip_calc",
+      "value": "小费计算"
+    },
+    {
+      "name": "mortgage_calc",
+      "value": "房贷计算"
+    }
+  ]
+}
